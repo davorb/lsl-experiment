@@ -1,0 +1,24 @@
+{
+  "id": "lsl_street",
+  "size": [320, 168],
+  "background": "backgrounds/pic22.png",
+  "ambient": "#7b86b3",
+  "walk": [[28, 128], [40, 124], [319, 124], [319, 151], [42, 151], [24, 138]],
+  "scale": { "yMin": 120, "yMax": 158, "scaleMin": 0.92, "scaleMax": 1 },
+  "masks": [{ "image": "masks/pic22.png" }],
+  "hotspots": [
+    { "id": "gutter", "name": "gutter", "rect": [222, 138, 252, 152], "verb": "use", "script": "lsl_street.gutter", "at": [236, 146] },
+    { "id": "newspaper", "name": "newspaper box", "rect": [121, 97, 133, 116], "verb": "use", "script": "lsl_street.newspaper", "at": [127, 125] },
+    { "id": "pole", "name": "lamp pole", "rect": [133, 0, 142, 142], "verb": "look", "script": "lsl_street.pole" },
+    { "id": "shop_door", "name": "shop door", "rect": [67, 70, 91, 120], "verb": "use", "script": "lsl_street.shop_door", "at": [80, 127] },
+    { "id": "shop_window", "name": "shop window", "rect": [95, 62, 222, 98], "verb": "look", "script": "lsl_street.shop_window" },
+    { "id": "chub", "name": "Chub & Co", "rect": [265, 0, 319, 120], "verb": "look", "script": "lsl_street.chub" }
+  ],
+  "exits": [
+    { "rect": [312, 124, 320, 152], "to": "lsl_outside", "spawn": [10, 150] }
+  ],
+  "lights": [
+    { "x": 150, "y": 80, "radius": 80, "color": "rgba(255,235,170,0.40)" },
+    { "x": 300, "y": 85, "radius": 70, "color": "rgba(255,120,220,0.30)" }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "lsl-coop",
+  "private": true,
+  "type": "module",
+  "workspaces": ["client", "server", "tools"],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "extract": "npm run extract -w tools --",
+    "build": "npm run build -w client",
+    "start": "npm run build -w client && npm run start -w server",
+    "typecheck": "npm run typecheck -w client && npm run typecheck -w server && npm run typecheck -w tools"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": { "node": ">=18.18" }
+}

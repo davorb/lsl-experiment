@@ -1,0 +1,20 @@
+{
+  "id": "lobby",
+  "size": [320, 168],
+  "background": "backgrounds/lobby.png",
+  "ambient": "#a89a92",
+  "walk": [[40, 150], [280, 150], [260, 100], [60, 100]],
+  "scale": { "yMin": 100, "yMax": 150, "scaleMin": 0.7, "scaleMax": 1 },
+  "masks": [],
+  "hotspots": [
+    { "id": "desk", "name": "desk", "rect": [40, 66, 100, 100], "verb": "use", "script": "lobby.desk" },
+    { "id": "door", "name": "door", "rect": [205, 40, 235, 100], "verb": "use", "script": "lobby.door" }
+  ],
+  "exits": [
+    { "rect": [205, 96, 235, 104], "to": "hall", "spawn": [160, 140], "requires": "doorOpen" }
+  ],
+  "lights": [
+    { "x": 70, "y": 70, "radius": 90, "color": "rgba(255,214,160,0.35)" },
+    { "x": 220, "y": 60, "radius": 80, "color": "rgba(255,200,140,0.30)" }
+  ]
+}

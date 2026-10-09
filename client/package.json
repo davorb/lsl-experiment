@@ -1,0 +1,12 @@
+{
+  "name": "@lsl/client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "pixi.js": "^8.5.0", "zod": "^3.23.8" },
+  "devDependencies": { "vite": "^5.4.0" }
+}

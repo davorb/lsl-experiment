@@ -1,0 +1,24 @@
+{
+  "id": "lsl_bar",
+  "size": [320, 168],
+  "background": "backgrounds/pic15.png",
+  "ambient": "#b79a8c",
+  "walk": [[14, 141], [75, 113], [103, 106], [107, 127], [262, 128], [262, 121], [303, 130], [308, 142], [308, 157], [183, 157], [183, 164], [137, 164], [137, 157], [14, 157]],
+  "scale": { "yMin": 120, "yMax": 158, "scaleMin": 0.92, "scaleMax": 1 },
+  "masks": [{ "image": "masks/pic15.png" }],
+  "hotspots": [
+    { "id": "moose", "name": "moose head", "rect": [14, 34, 60, 80], "verb": "look", "script": "lsl_bar.moose" },
+    { "id": "back_door", "name": "back room door", "rect": [66, 64, 102, 108], "verb": "use", "script": "lsl_bar.back_door", "at": [88, 111] },
+    { "id": "restroom", "name": "restroom door", "rect": [282, 88, 312, 140], "verb": "use", "script": "lsl_bar.restroom", "at": [296, 138] },
+    { "id": "sign", "name": "mirror", "rect": [158, 50, 232, 72], "verb": "look", "script": "lsl_bar.mirror" },
+    { "id": "bar", "name": "bar", "rect": [105, 88, 264, 128], "verb": "use", "script": "lsl_bar.bar", "at": [185, 132] }
+  ],
+  "exits": [
+    { "rect": [138, 157, 182, 166], "to": "lsl_outside", "spawn": [137, 140] }
+  ],
+  "lights": [
+    { "x": 160, "y": 62, "radius": 120, "color": "rgba(255,200,130,0.45)" },
+    { "x": 290, "y": 100, "radius": 50, "color": "rgba(255,230,190,0.30)" },
+    { "x": 90, "y": 90, "radius": 50, "color": "rgba(255,180,120,0.30)" }
+  ]
+}

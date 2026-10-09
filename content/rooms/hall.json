@@ -1,0 +1,19 @@
+{
+  "id": "hall",
+  "size": [320, 168],
+  "background": "backgrounds/hall.png",
+  "ambient": "#8791ad",
+  "walk": [[20, 150], [300, 150], [290, 110], [30, 110]],
+  "scale": { "yMin": 110, "yMax": 150, "scaleMin": 0.7, "scaleMax": 1 },
+  "masks": [],
+  "hotspots": [
+    { "id": "lamp", "name": "lamp", "rect": [250, 60, 280, 110], "verb": "look", "script": "hall.lamp" }
+  ],
+  "exits": [
+    { "rect": [140, 106, 180, 114], "to": "lobby", "spawn": [220, 122] }
+  ],
+  "lights": [
+    { "x": 265, "y": 70, "radius": 70, "color": "rgba(170,200,255,0.35)" },
+    { "x": 80, "y": 60, "radius": 70, "color": "rgba(150,180,255,0.25)" }
+  ]
+}

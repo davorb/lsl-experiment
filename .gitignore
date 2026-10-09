@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+# game assets are never committed
+game-data/
+content/backgrounds/
+content/sprites/
+content/masks/
+# generated room stubs; only the placeholder rooms are tracked
+content/rooms/*
+!content/rooms/lobby.json
+!content/rooms/hall.json
+!content/rooms/lsl_*.json
