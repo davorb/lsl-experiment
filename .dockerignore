@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+client/dist
+.git
+.DS_Store
+game-data
+game-data-extract-*
+content/backgrounds
+content/sprites
+content/masks
+content/text
+content/agi

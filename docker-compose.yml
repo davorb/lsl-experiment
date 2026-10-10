@@ -1,0 +1,10 @@
+services:
+  lsl:
+    build: .
+    restart: unless-stopped
+    environment:
+      - LSL_SKIP_INTRO=1
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./game-data:/app/game-data:ro

@@ -110,6 +110,12 @@ export class AgiGame {
     verb('Talk to', 'talk to ', false);
     verb('Use', 'use ', false);
     verb('Inventory', 'inventory', true);
+    // Function keys (the casino uses F4/F6/F8): on-screen buttons for phones, which have none.
+    for (const f of ['F4', 'F6', 'F8']) {
+      const b = el<HTMLButtonElement>('button', { type: 'button', textContent: f, title: `Press ${f}` });
+      b.onclick = () => { if (this.modalId === null) this.net.send({ type: 'agi_key', ascii: 0, scan: FKEY_SCAN[f]! }); };
+      verbs.append(b);
+    }
     const mute = el<HTMLButtonElement>('button', { type: 'button', textContent: '♪ on', title: 'Toggle music' });
     mute.onclick = () => { this.synth.setMuted(!this.synth.muted); mute.textContent = this.synth.muted ? '♪ off' : '♪ on'; };
     mute.className = 'mute';
@@ -117,12 +123,14 @@ export class AgiGame {
     this.cmdInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') { this.sendCommand(this.cmdInput.value); this.cmdInput.value = ''; }
+      else if (FKEY_SCAN[e.key] !== undefined) this.keydown(e);
       else if (ARROW_DIR[e.key]) { e.preventDefault(); this.keydown(e); }
     });
     this.cmdInput.addEventListener('keyup', (e) => { if (ARROW_DIR[e.key]) this.keyup(e); });
     this.chatInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter' && this.chatInput.value.trim()) { this.net.send({ type: 'chat', text: this.chatInput.value }); this.chatInput.value = ''; }
+      else if (FKEY_SCAN[e.key] !== undefined) this.keydown(e);
     });
     // Keys for screens that wait for a keypress (the age quiz, "press any key"): phones have no keyboard to hand.
     for (const [label, ascii] of [['A', 97], ['B', 98], ['C', 99], ['D', 100], ['Enter ⏎', 13]] as const) {
