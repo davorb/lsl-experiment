@@ -109,6 +109,9 @@ export class AgiSession {
     this.send(c, { type: 'agi_welcome', playerId: id, chat: this.chat });
     this.broadcastPlayers();
     this.send(c, this.picMessage());
+    // Music is broadcast once when the game starts it, so a late joiner (or a reload) gets the current
+    // sound here; it restarts from the top rather than from where everyone else is.
+    if (this.interp.sound) this.send(c, { type: 'agi_sound', n: this.interp.sound.n });
     this.send(c, { type: 'agi_frame', frame: this.frame() });
     if (this.modal) this.send(c, { type: 'agi_modal', mid: this.modal.mid, modal: this.modal.modal as AgiModal, owner: this.owner });
     this.timer ??= setInterval(() => this.tick(), TICK_MS);
