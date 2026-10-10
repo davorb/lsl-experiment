@@ -241,7 +241,6 @@ export class AgiGame {
     this.statusBar.replaceChildren(
       el('span', { textContent: `Score: ${f.score} of ${f.maxScore}` }),
       el('span', { className: 'who', textContent: owner ? `Larry: ${owner}${f.egoOwner === this.me ? ' (you)' : ''}` : '' }),
-      el('span', { textContent: `Sound: ${f.soundOn ? 'on' : 'off'}` }),
     );
     this.cmdInput.disabled = !f.accept || this.modalId !== null;
     this.keys.style.display = !f.accept && this.modalId === null && f.egoOwner === this.me ? 'flex' : 'none';
