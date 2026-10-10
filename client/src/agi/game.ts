@@ -28,10 +28,13 @@ export class AgiGame {
   private modalId: number | null = null;
   private modalKind: AgiModal['kind'] | null = null;
   private zoom = 2;
+  private ready = false;
+  private queue: ServerMessage[] = [];
 
   private root = el<HTMLDivElement>('div', { id: 'agi' });
   private menubar = el<HTMLDivElement>('div', { id: 'agi-menubar' });
   private statusBar = el<HTMLDivElement>('div', { id: 'agi-status' });
+  private roster = el<HTMLDivElement>('div', { id: 'agi-roster' });
   private stage = el<HTMLDivElement>('div', { id: 'stage' });
   private texts = el<HTMLDivElement>('div', { id: 'agi-texts' });
   private modalBox = el<HTMLDivElement>('div', { id: 'dialogue' });
@@ -59,6 +62,8 @@ export class AgiGame {
     window.addEventListener('keyup', (e) => this.keyup(e));
     app.canvas.addEventListener('pointerdown', (e) => this.click(e));
     (window as unknown as { __agi: unknown }).__agi = this; // for debugging in the console
+    this.ready = true;
+    for (const m of this.queue.splice(0)) this.handle(m);
   }
 
   // ---- DOM ---------------------------------------------------------------------------------------
@@ -99,6 +104,7 @@ export class AgiGame {
       this.menubar,
       this.statusBar,
       this.stage,
+      this.roster,
       el<HTMLDivElement>('div', { id: 'agi-bar' }, verbs, mute),
       el<HTMLDivElement>('div', { id: 'agi-inputs' }, this.cmdInput, this.chatInput),
     );
@@ -122,13 +128,15 @@ export class AgiGame {
   // ---- server messages -----------------------------------------------------------------------------
 
   private handle(m: ServerMessage): void {
+    // The server sends the picture right after the welcome, before the renderer has finished starting.
+    if (!this.ready) { this.queue.push(m); return; }
     switch (m.type) {
       case 'agi_pic': this.scene.setPicture(b64(m.visual), b64(m.priority)); break;
       case 'agi_frame': this.onFrame(m.frame); break;
       case 'agi_modal': this.openModal(m.mid, m.modal, m.owner); break;
       case 'agi_modal_close': if (this.modalId === m.mid) this.closeModal(); break;
       case 'agi_sound': void this.synth.play(m.n); break;
-      case 'agi_players': Object.assign(this.names, m.players); for (const k of Object.keys(this.names)) if (!(k in m.players)) delete this.names[k]; break;
+      case 'agi_players': Object.assign(this.names, m.players); for (const k of Object.keys(this.names)) if (!(k in m.players)) delete this.names[k]; this.renderRoster(); break;
       case 'chat': {
         this.addChat(m.entry);
         this.scene.showBubble(m.entry.id, m.entry.text);
@@ -151,8 +159,15 @@ export class AgiGame {
       el('span', { textContent: `Sound: ${f.soundOn ? 'on' : 'off'}` }),
     );
     this.cmdInput.disabled = !f.accept || this.modalId !== null;
+    this.renderRoster();
     this.renderMenus(f);
     this.renderTexts();
+  }
+
+  private renderRoster(): void {
+    const owner = this.frame?.egoOwner ?? null;
+    const parts = Object.entries(this.names).map(([id, name]) => `${name}${id === this.me ? ' (you)' : ''}${id === owner ? ' ★ Larry' : ''}`);
+    this.roster.textContent = `In this game: ${parts.join(' · ') || '—'}. Type a command to take over Larry; otherwise walk your own character.`;
   }
 
   private renderMenus(f: AgiFrame): void {

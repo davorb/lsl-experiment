@@ -9,7 +9,9 @@ import type { AgiFrame, AgiModal } from '../../../shared/agi/protocol';
 import { AgiInterp, DX, DY, type Modal } from './interp';
 import type { AgiResources } from './resources';
 
-const TICK_MS = 50;
+// The original runs one cycle per (animation interval x 50ms); we tick at twice that rate so the default
+// pace suits click-to-walk play. The game's own Speed menu still scales it.
+const TICK_MS = 25;
 const EXPIRY_MS = 10 * 60 * 1000;
 const AUTO_ACK_MS = 45_000;
 const AVATAR_VIEW = 0;
@@ -47,9 +49,26 @@ export class AgiSession {
   private sentPicVersion = -1;
   private lastRoom = -1;
   private startedAt = Date.now();
+  private waiting = false;
+  private lastFrameText = '';
 
   constructor(readonly code: string, res: AgiResources, private onDead: (code: string) => void) {
     this.interp = new AgiInterp(res);
+    if (process.env.LSL_SKIP_INTRO) this.skipIntro();
+  }
+
+  /** Dev aid: answer the title/age quiz automatically and stop at the first playable room. */
+  private skipIntro(): void {
+    const it = this.interp;
+    for (let i = 0; i < 2000 && it.vars[0] !== 11; i++) {
+      it.nowMs += TICK_MS * 2;
+      if (i % 15 === 14) it.pressKey(13, 28);
+      const gen = it.cycle();
+      let r = gen.next();
+      while (!r.done) r = gen.next(r.value.kind === 'number' ? 30 : r.value.kind === 'string' ? 'x' : undefined);
+    }
+    for (let i = 0; i < 30; i++) { it.nowMs += TICK_MS * 2; const gen = it.cycle(); let r = gen.next(); while (!r.done) r = gen.next(undefined); }
+    this.lastRoom = it.vars[0]!;
   }
 
   get size(): number {
@@ -80,7 +99,7 @@ export class AgiSession {
     const ego = this.interp.objs[0]!;
     const c: Conn = {
       id, ws, name: this.uniqueName(wantedName), lastChat: 0,
-      avatar: { x: ego.x, y: ego.y, dir: 0, loop: 2, cel: 0, target: null },
+      avatar: { x: Math.max(0, Math.min(PIC_W - 8, ego.x + 10 + 8 * this.conns.size)), y: ego.y, dir: 0, loop: 2, cel: 0, target: null },
     };
     this.conns.set(id, c);
     this.owner ??= id;
@@ -167,6 +186,8 @@ export class AgiSession {
   }
 
   private say(c: Conn, raw: string): void {
+    const jump = /^\/room (\d{1,2})$/.exec(raw.trim());
+    if (jump && process.env.LSL_DEV) { this.interp.requestRoom(Number(jump[1])); return; }
     const now = Date.now();
     if (now - c.lastChat < 300) return;
     const text = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, CHAT_MAX);
@@ -212,8 +233,9 @@ export class AgiSession {
 
   private tick(): void {
     this.ticks++;
-    this.interp.nowMs = this.ticks * TICK_MS;
-    if (this.modal) return;
+    if (this.modal) return; // the game clock stands still while a dialog is open
+    this.interp.nowMs += TICK_MS;
+    if (this.waiting) { this.waiting = false; this.advance(undefined); return; }
     if (!this.cycleGen) {
       this.cycleDue++;
       const period = Math.max(1, this.interp.vars[10]!);
@@ -229,7 +251,11 @@ export class AgiSession {
     if (!this.cycleGen) return;
     try {
       const r = this.cycleGen.next(answer);
-      if (!r.done) { this.openModal(r.value); return; }
+      if (!r.done) {
+        if (r.value.kind === 'wait') { this.waiting = true; return; }
+        this.openModal(r.value);
+        return;
+      }
     } catch (err) {
       console.error('AGI interpreter error:', err);
       this.cycleGen = null;
@@ -257,7 +283,9 @@ export class AgiSession {
     this.stepAvatars();
     for (const n of it.soundQueue.splice(0)) this.broadcast({ type: 'agi_sound', n });
     if (it.picVersion !== this.sentPicVersion) this.broadcast(this.picMessage());
-    this.broadcast({ type: 'agi_frame', frame: this.frame() });
+    const frame = this.frame();
+    const text = JSON.stringify(frame);
+    if (text !== this.lastFrameText) { this.lastFrameText = text; this.broadcast({ type: 'agi_frame', frame }); }
   }
 
   // ---- avatars (non-owner players) --------------------------------------------------------------

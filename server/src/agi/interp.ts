@@ -21,7 +21,9 @@ export type Modal =
   | { kind: 'number'; prompt: string }
   | { kind: 'inventory'; items: { id: number; name: string }[]; select: boolean }
   | { kind: 'showobj'; view: number; name: string; desc: string }
-  | { kind: 'message'; text: string };
+  | { kind: 'message'; text: string }
+  /** Not shown to players: a backward jump (a polling loop) yields so the host can deliver input. */
+  | { kind: 'wait' };
 
 interface Pending { modal: Modal; then?: (answer: unknown) => void }
 
@@ -75,7 +77,7 @@ class NewRoomSignal {}
 class GameRestart {}
 
 export const priorityFromY = (y: number): number => (y < 48 ? 4 : Math.min(14, Math.floor((y - 48) / 12) + 5));
-const dirFromDelta = (dx: number, dy: number): number => [[8, 1, 2], [7, 0, 3], [6, 5, 4]][Math.sign(dy) + 1]![Math.sign(dx) + 1]!;
+const dirFromDelta = (dx: number, dy: number): number => [[8, 1, 2], [7, 0, 3], [6, 5, 4]][Math.sign(dy || 0) + 1]![Math.sign(dx || 0) + 1]!;
 
 export class AgiInterp {
   vars = new Uint8Array(256);
@@ -114,6 +116,8 @@ export class AgiInterp {
   private pendingLine: string | null = null;
   private lastMenuTitle = -1;
   private cycleNo = 0;
+  private lastClockMs = 0;
+  private pendingRoom: number | null = null;
 
   constructor(readonly res: AgiResources) {
     this.reset();
@@ -151,6 +155,11 @@ export class AgiInterp {
 
   // ---- host-facing API ------------------------------------------------------------
 
+  /** Dev aid: jump to a room at the start of the next cycle. */
+  requestRoom(n: number): void {
+    this.pendingRoom = n;
+  }
+
   /** Queue a typed command; it is parsed at the start of the next cycle. */
   enterCommand(text: string): void {
     if (this.acceptInput) this.pendingLine = text;
@@ -174,6 +183,12 @@ export class AgiInterp {
   /** Run one interpreter cycle. Yields modal requests; the caller resumes with the player's answer. */
   *cycle(): Generator<Modal, void, unknown> {
     this.cycleNo++;
+    this.tickClock();
+    if (this.pendingRoom !== null) {
+      const n = this.pendingRoom;
+      this.pendingRoom = null;
+      try { this.newRoom(n); } catch (e) { if (!(e instanceof NewRoomSignal)) throw e; }
+    }
     // Input line -> flags/word ids.
     if (this.pendingLine !== null) {
       const text = this.pendingLine;
@@ -209,6 +224,18 @@ export class AgiInterp {
     }
   }
 
+  /** Game clock: variables 11-14 hold seconds, minutes, hours and days. */
+  private tickClock(): void {
+    while (this.nowMs - this.lastClockMs >= 1000) {
+      this.lastClockMs += 1000;
+      const v = this.vars;
+      v[11] = v[11]! + 1;
+      if (v[11]! >= 60) { v[11] = 0; v[12] = v[12]! + 1; }
+      if (v[12]! >= 60) { v[12] = 0; v[13] = v[13]! + 1; }
+      if (v[13]! >= 24) { v[13] = 0; v[14] = (v[14]! + 1) & 255; }
+    }
+  }
+
   /** Ego direction: variable 6 drives it under player control, otherwise it mirrors the object. */
   private driveEgo(): void {
     const ego = this.objs[0]!;
@@ -219,7 +246,7 @@ export class AgiInterp {
         if (Math.abs(dx) <= Math.max(1, ego.stepSize) && Math.abs(dy) <= Math.max(1, ego.stepSize)) { this.walkTarget = null; this.vars[6] = 0; }
         else this.vars[6] = dirFromDelta(Math.abs(dx) <= ego.stepSize ? 0 : dx, Math.abs(dy) <= ego.stepSize ? 0 : dy);
       }
-      ego.dir = this.vars[6]!;
+      ego.dir = this.vars[6]! <= 8 ? this.vars[6]! : 0;
       if (ego.motion === 'none' || ego.motion === 'move' && !ego.drawn) ego.motion = 'normal';
     } else {
       this.vars[6] = ego.dir;
@@ -252,6 +279,7 @@ export class AgiInterp {
       if (op === 0xfe) {
         const off = (code[pc]! | (code[pc + 1]! << 8)) << 16 >> 16;
         pc += 2 + off;
+        if (off < 0) yield { kind: 'wait' };
         continue;
       }
       const argc = ARGC[op];
@@ -456,7 +484,7 @@ export class AgiInterp {
       case 83: { const o = obj(a[0]!); o.motion = 'follow'; o.targetStep = a[1]! || o.stepSize; o.targetFlag = a[2]!; f[a[2]!] = 0; if (a[0] === 0) this.playerControl = false; return; }
       case 84: { const o = obj(a[0]!); o.motion = 'wander'; o.wanderCount = 0; if (a[0] === 0) this.playerControl = false; return; }
       case 85: obj(a[0]!).motion = 'normal'; return;
-      case 86: obj(a[0]!).dir = v[a[1]!]!; return;
+      case 86: obj(a[0]!).dir = v[a[1]!]! <= 8 ? v[a[1]!]! : 0; return;
       case 87: v[a[1]!] = obj(a[0]!).dir; return;
       case 88: obj(a[0]!).ignoreBlocks = true; return;
       case 89: obj(a[0]!).ignoreBlocks = false; return;

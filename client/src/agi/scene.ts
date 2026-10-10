@@ -34,6 +34,7 @@ export class AgiScene {
   private views = new Map<number, Frame[][] | null>();
   private loading = new Set<number>();
   private lightKey = -999;
+  private lastVisual: Uint8Array | null = null;
   zoom = 2;
   /** Native position (pixels) of each player's head, for bubbles. */
   private heads = new Map<string, { x: number; y: number }>();
@@ -70,6 +71,8 @@ export class AgiScene {
   // ---- picture ---------------------------------------------------------------------------
 
   setPicture(visual: Uint8Array, priority: Uint8Array): void {
+    this.lastVisual = visual;
+    this.lightKey = -999; // relight: the new picture may need different automatic lighting
     const rgba = pictureToRGBA(visual);
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -108,7 +111,7 @@ export class AgiScene {
     if (room === this.lightKey) return;
     this.lightKey = room;
     this.lights?.dispose();
-    const l = lightingFor(room);
+    const l = lightingFor(room, this.lastVisual ?? undefined);
     this.lights = buildLights(this.app.renderer, { size: [W, H], ambient: l.ambient, lights: l.lights });
     this.world.addChild(this.lights.multiply, this.lights.glow);
   }
