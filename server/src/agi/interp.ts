@@ -112,6 +112,8 @@ export class AgiInterp {
   walkTarget: { x: number; y: number } | null = null;
   private walkPath: Pt[] | null = null;
   private walkStuck = 0;
+  /** After a click-to-walk ends at a door/edge the player could not stand on, keep pushing that way like a held arrow key. */
+  private push: { dir: number; left: number; x: number; y: number } | null = null;
   private walkRetries = 0;
   private lastEgoX = -1;
   private lastEgoY = -1;
@@ -195,6 +197,7 @@ export class AgiInterp {
     this.walkPath = null;
     this.walkStuck = 0;
     this.walkRetries = 0;
+    if (t) this.push = null;
     if (t && this.playerControl) this.vars[6] = 0;
   }
 
@@ -217,6 +220,7 @@ export class AgiInterp {
   /** Direction from arrow keys (0 = stop). Only applies while the player is in control. */
   setDirection(d: number): void {
     this.setWalkTarget(null);
+    this.push = null;
     if (this.playerControl) this.vars[6] = d;
   }
 
@@ -281,6 +285,7 @@ export class AgiInterp {
     const ego = this.objs[0]!;
     if (this.playerControl) {
       if (this.walkTarget && ego.drawn) this.followWalkTarget(ego);
+      else if (this.push) this.pushOut(ego);
       ego.dir = this.vars[6]! <= 8 ? this.vars[6]! : 0;
       if (ego.motion === 'none' || ego.motion === 'move' && !ego.drawn) ego.motion = 'normal';
     } else {
@@ -293,25 +298,48 @@ export class AgiInterp {
     const goal = { x: this.walkTarget!.x - w / 2, y: this.walkTarget!.y };
     if (!this.walkPath) {
       this.walkPath = this.plan(w, h, { x: ego.x, y: ego.y }, goal, ego.ignoreHorizon);
-      if (!this.walkPath.length) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+      if (!this.walkPath.length) { this.finishWalk(ego, w); return; }
     }
     const step = Math.max(1, ego.stepSize);
     // Advance only when exactly on a waypoint: cutting corners can step into a barrier the path went around.
     while (this.walkPath.length && this.walkPath[0]!.x === ego.x && this.walkPath[0]!.y === ego.y) this.walkPath.shift();
-    if (!this.walkPath.length) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+    if (!this.walkPath.length) { this.finishWalk(ego, w); return; }
     // Blocked by something the planner cannot see (a moving object): re-plan a few times, then give up.
     if (ego.x === this.lastEgoX && ego.y === this.lastEgoY) {
       if (++this.walkStuck > 8) {
         this.walkStuck = 0;
-        if (++this.walkRetries > 3) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+        if (++this.walkRetries > 3) { this.finishWalk(ego, w); return; }
         this.walkPath = this.plan(w, h, { x: ego.x, y: ego.y }, goal, ego.ignoreHorizon);
-        if (!this.walkPath.length) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+        if (!this.walkPath.length) { this.finishWalk(ego, w); return; }
       }
     } else this.walkStuck = 0;
     this.lastEgoX = ego.x;
     this.lastEgoY = ego.y;
     const wp = this.walkPath[Math.min(step, this.walkPath.length) - 1]!;
     this.vars[6] = dirFromDelta(wp.x - ego.x, wp.y - ego.y);
+  }
+
+  /**
+   * A click on a door, or on the very edge of the screen, cannot be reached exactly: exits fire when the ego walks
+   * into them (or off the edge). Finish the walk, then keep nudging towards the click for a few cycles.
+   */
+  private finishWalk(ego: ViewObj, w: number): void {
+    const t = this.walkTarget!;
+    this.setWalkTarget(null);
+    this.vars[6] = 0;
+    let dx = t.x - (ego.x + w / 2), dy = t.y - ego.y;
+    if (t.x <= 2) dx = -1; else if (t.x >= PIC_W - 3) dx = 1; else if (Math.abs(dx) <= 2) dx = 0;
+    if (t.y >= PIC_H - 3) dy = 1; else if (Math.abs(dy) <= 2) dy = 0;
+    const dir = dirFromDelta(dx, dy);
+    if (dir) this.push = { dir, left: 12, x: -1, y: -1 };
+  }
+
+  private pushOut(ego: ViewObj): void {
+    const p = this.push!;
+    if (p.left-- <= 0 || (ego.x === p.x && ego.y === p.y)) { this.push = null; this.vars[6] = 0; return; }
+    p.x = ego.x;
+    p.y = ego.y;
+    this.vars[6] = p.dir;
   }
 
   // ---- logic execution --------------------------------------------------------------
@@ -702,6 +730,7 @@ export class AgiInterp {
     this.vars[2] = 0;
     this.flags[5] = 1;
     this.walkTarget = null;
+    this.push = null;
     this.picVersion++;
     throw new NewRoomSignal();
   }
