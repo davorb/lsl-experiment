@@ -134,6 +134,7 @@ function extractAgi(): void {
   }
   console.log(`views: ${viewCount} written; player view = ${player?.view ?? 'none (client uses 16x32 rectangle)'}`);
   extractText(views);
+  extractRawResources();
   updateIndex(rooms, player);
   console.log(`rooms: ${rooms.slice(0, 12).join(', ')}${rooms.length > 12 ? ', ...' : ''}`);
 }
@@ -156,6 +157,24 @@ function extractText(views: Map<number, Buffer>): void {
   fs.writeFileSync(path.join(dir, 'views.json'), JSON.stringify(desc, null, 1));
   fs.writeFileSync(path.join(dir, 'objects.json'), JSON.stringify(decodeObjects(GAME), null, 1));
   console.log(`text: ${n} logic message tables, ${Object.keys(desc).length} view descriptions, objects.json`);
+}
+
+// Raw AGI resources for the interpreter (content/agi/<kind>/<n>.bin): the game runs from these, not from PNGs.
+function extractRawResources(): void {
+  const out = path.join(CONTENT, 'agi');
+  const counts: string[] = [];
+  for (const [dirName, kind] of [['logic', 'LOGDIR'], ['pic', 'PICDIR'], ['view', 'VIEWDIR'], ['snd', 'SNDDIR']] as const) {
+    const dir = path.join(out, dirName);
+    fs.mkdirSync(dir, { recursive: true });
+    const res = listResources(GAME, kind);
+    for (const [n, data] of res) fs.writeFileSync(path.join(dir, `${n}.bin`), data);
+    counts.push(`${res.size} ${dirName}`);
+  }
+  for (const [src, dest] of [['WORDS.TOK', 'words.bin'], ['OBJECT', 'object.bin']] as const) {
+    const f = path.join(GAME, src);
+    if (fs.existsSync(f)) fs.copyFileSync(f, path.join(out, dest));
+  }
+  console.log(`agi resources: ${counts.join(', ')}, words, objects`);
 }
 
 // ---- already-extracted PNGs ---------------------------------------------------

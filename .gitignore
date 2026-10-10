@@ -7,6 +7,7 @@ content/backgrounds/
 content/sprites/
 content/masks/
 content/text/
+content/agi/
 # generated room stubs; only the placeholder rooms are tracked
 content/rooms/*
 !content/rooms/lobby.json

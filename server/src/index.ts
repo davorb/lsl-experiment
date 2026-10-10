@@ -4,7 +4,7 @@ import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessageSchema, CODE_RE, parseWith, type ServerMessage } from '../../shared/protocol';
 import { CONTENT_DIR, ROOT } from './content';
-import { Registry, type Session } from './session';
+import { Registry } from './session';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DIST = path.join(ROOT, 'client', 'dist');
@@ -13,7 +13,7 @@ const MIME: Record<string, string> = {
   '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.map': 'application/json',
 };
 // Only these parts of content/ are served; scripts stay server-side.
-const CONTENT_PUBLIC = /^\/(index\.json|(rooms|backgrounds|sprites|masks)\/[\w./-]+)$/;
+const CONTENT_PUBLIC = /^\/(index\.json|(rooms|backgrounds|sprites|masks)\/[\w./-]+|agi\/(pic|snd|view)\/\d+\.bin)$/;
 
 function serveFile(res: http.ServerResponse, file: string): boolean {
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return false;
@@ -45,7 +45,7 @@ function reply(ws: WebSocket, msg: ServerMessage): void {
 }
 
 wss.on('connection', (ws) => {
-  let session: Session | null = null;
+  let session: ReturnType<Registry['getOrCreate']> = null;
   let playerId: string | null = null;
 
   ws.on('message', (data, isBinary) => {
@@ -66,13 +66,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!session || !playerId) return;
-    switch (msg.type) {
-      case 'input': session.input(playerId, msg.seq, msg.x, msg.y); break;
-      case 'verb': void session.verb(playerId, msg.hotspotId, msg.verb); break;
-      case 'chat': session.say(playerId, msg.text); break;
-      case 'choice': void session.choose(playerId, msg.hotspotId, msg.choice); break;
-      case 'pose': break; // reserved
-    }
+    session.handle(playerId, msg);
   });
 
   ws.on('close', () => {

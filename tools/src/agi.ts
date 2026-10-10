@@ -39,7 +39,7 @@ export function readResource(dir: string, entry: DirEntry): Buffer | null {
   return b.subarray(entry.offset + 5, entry.offset + 5 + len);
 }
 
-export function listResources(dir: string, kind: 'PICDIR' | 'VIEWDIR' | 'LOGDIR'): Map<number, Buffer> {
+export function listResources(dir: string, kind: 'PICDIR' | 'VIEWDIR' | 'LOGDIR' | 'SNDDIR'): Map<number, Buffer> {
   const out = new Map<number, Buffer>();
   readDir(dir, kind).forEach((e, i) => {
     if (!e) return;

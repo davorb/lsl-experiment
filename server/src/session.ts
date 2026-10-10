@@ -2,9 +2,11 @@ import type { WebSocket } from 'ws';
 import {
   CHAT_MAX, MAX_PLAYERS, NAME_MAX, TICK_HZ,
   scaleAt,
-  type ChatEntry, type Facing, type Flags, type Player, type Pt, type ServerMessage, type SessionState, type Verb,
+  type ChatEntry, type ClientMessage, type Facing, type Flags, type Player, type Pt, type ServerMessage, type SessionState, type Verb,
 } from '../../shared/protocol';
 import { inRect } from './geometry';
+import { AgiSession } from './agi/session';
+import { AgiResources, agiAvailable } from './agi/resources';
 import { itemLookText, loadIndex, loadRoom, makeText, runScript, type ScriptContext } from './content';
 
 const WALK_SPEED = 70; // native px/s at scale 1.0
@@ -102,6 +104,17 @@ export class Session {
     if (this.conns.size === 0) {
       if (this.timer) { clearInterval(this.timer); this.timer = null; }
       this.expiry = setTimeout(() => this.onDead(this.code), EXPIRY_MS);
+    }
+  }
+
+  /** Dispatch a post-hello client message (legacy placeholder engine). */
+  handle(id: string, msg: ClientMessage): void {
+    switch (msg.type) {
+      case 'input': this.input(id, msg.seq, msg.x, msg.y); break;
+      case 'verb': void this.verb(id, msg.hotspotId, msg.verb); break;
+      case 'chat': this.say(id, msg.text); break;
+      case 'choice': void this.choose(id, msg.hotspotId, msg.choice); break;
+      default: break;
     }
   }
 
@@ -287,13 +300,20 @@ export class Session {
 }
 
 export class Registry {
-  private sessions = new Map<string, Session>();
+  private sessions = new Map<string, Session | AgiSession>();
+  private res: AgiResources | null = null;
 
-  getOrCreate(code: string): Session | null {
+  getOrCreate(code: string): Session | AgiSession | null {
     let s = this.sessions.get(code);
     if (!s) {
       if (this.sessions.size >= MAX_SESSIONS) return null;
-      s = new Session(code, (c) => this.sessions.delete(c));
+      const drop = (c: string) => this.sessions.delete(c);
+      if (agiAvailable() && process.env.LSL_MODE !== 'legacy') {
+        this.res ??= new AgiResources();
+        s = new AgiSession(code, this.res, drop);
+      } else {
+        s = new Session(code, drop);
+      }
       this.sessions.set(code, s);
     }
     return s;

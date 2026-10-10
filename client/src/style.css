@@ -37,3 +37,30 @@ button, input { font: inherit; color: inherit; }
 #dialogue .choices button { text-align: left; background: #2a2333; border: 1px solid var(--edge); border-radius: 4px; padding: 5px 9px; cursor: pointer; font-size: 13px; }
 #dialogue .choices button:hover { border-color: var(--accent); background: #3a2f45; }
 .item { cursor: pointer; } .item:hover { border-color: var(--accent); }
+
+/* ---- AGI mode ---- */
+#agi { display: flex; flex-direction: column; gap: 6px; }
+#agi-menubar { display: flex; gap: 2px; background: #1b1722; border: 1px solid var(--edge); border-radius: 4px; min-height: 26px; position: relative; z-index: 5; }
+#agi-menubar .menu { position: relative; }
+#agi-menubar .menu > span { display: block; padding: 4px 12px; cursor: default; font-size: 13px; }
+#agi-menubar .menu:hover > span { background: var(--accent); color: #1a1208; }
+#agi-menubar .menu-items { display: none; position: absolute; top: 100%; left: 0; background: #241e2d; border: 1px solid var(--edge); min-width: 190px; z-index: 6; }
+#agi-menubar .menu:hover .menu-items { display: block; }
+#agi-menubar .menu-items button { display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+#agi-menubar .menu-items button:hover:not(:disabled) { background: var(--accent); color: #1a1208; }
+#agi-menubar .menu-items button:disabled { opacity: .4; }
+#agi-status { display: flex; justify-content: space-between; padding: 3px 10px; background: #e8e2d4; color: #111; font-weight: 700; font-size: 13px; border-radius: 3px; }
+#agi-status .who { font-weight: 400; color: #335; }
+#agi-texts { position: absolute; inset: 0; pointer-events: none; font-family: ui-monospace, Menlo, monospace; font-weight: 700; overflow: hidden; }
+#agi-texts span { position: absolute; white-space: pre; }
+#agi-bar { display: flex; gap: 6px; justify-content: space-between; }
+#agi-verbs { display: flex; gap: 6px; flex-wrap: wrap; }
+#agi-bar button { background: #2a2333; border: 1px solid var(--edge); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+#agi-bar button:hover { border-color: var(--accent); }
+#agi-inputs { display: flex; gap: 8px; }
+#agi-inputs input { flex: 1; background: #120f17; border: 1px solid var(--edge); border-radius: 4px; padding: 8px 10px; }
+#agi-inputs input#agi-cmd { flex: 2; border-color: #5a4a70; }
+#agi-inputs input:disabled { opacity: .5; }
+#dialogue .hint { color: var(--dim); font-size: 12px; margin-top: 6px; }
+#dialogue img.obj { image-rendering: pixelated; height: 120px; float: left; margin-right: 14px; }
+#dialogue input.prompt { margin-top: 8px; width: 100%; background: #120f17; border: 1px solid var(--accent); border-radius: 4px; padding: 6px 8px; font-size: 15px; }

@@ -77,7 +77,7 @@ async function buildPriorityLayers(room: Room, bg: Texture | null): Promise<{ q:
 }
 
 export class Game {
-  private net = new Net();
+  private net: Net;
   private ui: UI;
   private scene!: Scene;
   private me = '';
@@ -89,9 +89,10 @@ export class Game {
   private canvas!: HTMLCanvasElement;
   private choiceSpot: string | null = null;
 
-  constructor() {
+  constructor(net: Net) {
+    this.net = net;
     this.ui = new UI({
-      onJoin: (code, name) => void this.join(code, name),
+      onJoin: () => {},
       onChat: (text) => this.net.send({ type: 'chat', text }),
       onItem: (item) => this.net.send({ type: 'verb', hotspotId: `item:${item}`, verb: 'look' }),
       onChoice: (choice) => {
@@ -103,14 +104,10 @@ export class Game {
     window.addEventListener('resize', () => this.relayout());
   }
 
-  private async join(code: string, name: string): Promise<void> {
-    try {
-      this.code = code;
-      await this.net.connect();
-      this.net.send({ type: 'hello', code, name: name || undefined });
-    } catch (e) {
-      this.ui.showError(e instanceof Error ? e.message : 'Connection failed.');
-    }
+  /** Start from the welcome message that told the entry point this room runs the placeholder engine. */
+  begin(welcome: ServerMessage): void {
+    this.ui.hideLobby();
+    void this.handle(welcome);
   }
 
   private async boot(): Promise<void> {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AgiAvatarSchema, AgiFrameSchema, AgiModalSchema } from './agi/protocol';
 
 export const CHAT_MAX = 200;
 export const NAME_MAX = 16;
@@ -55,7 +56,15 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chat'), text: z.string() }).strict(),
   z.object({ type: z.literal('pose'), anim: AnimSchema }).strict(),
   z.object({ type: z.literal('choice'), hotspotId: z.string(), choice: z.string() }).strict(),
+  // AGI mode
+  z.object({ type: z.literal('agi_cmd'), text: z.string() }).strict(),
+  z.object({ type: z.literal('agi_dir'), dir: z.number().int().min(0).max(8) }).strict(),
+  z.object({ type: z.literal('agi_goto'), x: z.number(), y: z.number() }).strict(),
+  z.object({ type: z.literal('agi_key'), ascii: z.number().int(), scan: z.number().int() }).strict(),
+  z.object({ type: z.literal('agi_ack'), mid: z.number().int(), value: z.union([z.string(), z.number()]).optional() }).strict(),
+  z.object({ type: z.literal('agi_menu'), controller: z.number().int() }).strict(),
 ]);
+void AgiAvatarSchema;
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
 // ---- server -> client ------------------------------------------------------
@@ -90,6 +99,14 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     })
     .strict(),
   z.object({ type: z.literal('chat'), entry: ChatEntrySchema }).strict(),
+  // AGI mode
+  z.object({ type: z.literal('agi_welcome'), playerId: z.string(), chat: z.array(ChatEntrySchema) }).strict(),
+  z.object({ type: z.literal('agi_frame'), frame: AgiFrameSchema }).strict(),
+  z.object({ type: z.literal('agi_pic'), version: z.number(), visual: z.string(), priority: z.string() }).strict(),
+  z.object({ type: z.literal('agi_modal'), mid: z.number(), modal: AgiModalSchema, owner: z.string().nullable() }).strict(),
+  z.object({ type: z.literal('agi_modal_close'), mid: z.number() }).strict(),
+  z.object({ type: z.literal('agi_sound'), n: z.number().nullable() }).strict(),
+  z.object({ type: z.literal('agi_players'), players: z.record(z.string()) }).strict(),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 

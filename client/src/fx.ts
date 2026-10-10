@@ -31,7 +31,7 @@ export interface LightLayers {
   dispose(): void;
 }
 
-export function buildLights(renderer: Renderer, room: Room): LightLayers {
+export function buildLights(renderer: Renderer, room: Pick<Room, 'size' | 'ambient' | 'lights'>): LightLayers {
   const [w, h] = room.size;
   const rt = RenderTexture.create({ width: w, height: h, resolution: 1, scaleMode: 'linear' });
   const scene = new Container();
