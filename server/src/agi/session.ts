@@ -23,6 +23,7 @@ interface Avatar {
   loop: number;
   cel: number;
   target: { x: number; y: number } | null;
+  path?: { x: number; y: number }[];
 }
 
 interface Conn {
@@ -109,6 +110,7 @@ export class AgiSession {
     this.send(c, { type: 'agi_frame', frame: this.frame() });
     if (this.modal) this.send(c, { type: 'agi_modal', mid: this.modal.mid, modal: this.modal.modal as AgiModal, owner: this.owner });
     this.timer ??= setInterval(() => this.tick(), TICK_MS);
+    this.pushFrame();
     return { id };
   }
 
@@ -116,10 +118,18 @@ export class AgiSession {
     if (!this.conns.delete(id)) return;
     if (this.owner === id) this.owner = [...this.conns.keys()][0] ?? null;
     this.broadcastPlayers();
+    this.pushFrame();
     if (this.conns.size === 0) {
       if (this.timer) { clearInterval(this.timer); this.timer = null; }
       this.expiry = setTimeout(() => this.onDead(this.code), EXPIRY_MS);
     }
+  }
+
+  /** Send the current frame to everyone now (used when players come and go while the game waits on a dialog). */
+  private pushFrame(): void {
+    const frame = this.frame();
+    this.lastFrameText = JSON.stringify(frame);
+    this.broadcast({ type: 'agi_frame', frame });
   }
 
   private broadcastPlayers(): void {
@@ -144,13 +154,13 @@ export class AgiSession {
       }
       case 'agi_dir': {
         if (this.owner === id) this.interp.setDirection(msg.dir);
-        else { c.avatar.dir = msg.dir; c.avatar.target = null; }
+        else { c.avatar.dir = msg.dir; c.avatar.target = null; c.avatar.path = undefined; }
         break;
       }
       case 'agi_goto': {
         const target = { x: Math.max(0, Math.min(PIC_W - 1, Math.round(msg.x))), y: Math.max(0, Math.min(PIC_H - 1, Math.round(msg.y))) };
-        if (this.owner === id) this.interp.walkTarget = target;
-        else { c.avatar.target = target; c.avatar.dir = 0; }
+        if (this.owner === id) this.interp.setWalkTarget(target);
+        else { c.avatar.target = target; c.avatar.path = undefined; c.avatar.dir = 0; }
         break;
       }
       case 'agi_key': {
@@ -169,6 +179,29 @@ export class AgiSession {
     }
   }
 
+  announce(text: string): void {
+    this.broadcast({ type: 'chat', entry: { id: 'sys', name: 'Game', text, t: Date.now() } });
+  }
+
+  /** Start the game over for everyone connected (scheduled every couple of hours). */
+  hardReset(): void {
+    if (this.modal) {
+      if (this.modal.timer) clearTimeout(this.modal.timer);
+      this.broadcast({ type: 'agi_modal_close', mid: this.modal.mid });
+      this.modal = null;
+    }
+    this.cycleGen = null;
+    this.waiting = false;
+    this.interp.reset();
+    this.owner = [...this.conns.keys()][0] ?? null;
+    this.lastRoom = -1;
+    this.lastFrameText = '';
+    this.broadcast({ type: 'agi_sound', n: null });
+    this.broadcast(this.picMessage());
+    this.broadcast({ type: 'agi_frame', frame: this.frame() });
+    this.announce('The game has restarted.');
+  }
+
   /** Hand the ego to this player: Larry swaps places with them. */
   private claimEgo(c: Conn): void {
     if (this.owner === c.id) return;
@@ -179,7 +212,7 @@ export class AgiSession {
     ego.x = c.avatar.x;
     ego.y = c.avatar.y;
     this.interp.vars[6] = 0;
-    this.interp.walkTarget = null;
+    this.interp.setWalkTarget(null);
     c.avatar.dir = 0;
     c.avatar.target = null;
     this.owner = c.id;
@@ -300,9 +333,13 @@ export class AgiSession {
       const a = c.avatar;
       let dir = a.dir;
       if (a.target) {
-        const dx = a.target.x - (a.x + w / 2), dy = a.target.y - a.y;
-        if (Math.abs(dx) <= step && Math.abs(dy) <= step) { a.target = null; dir = 0; }
-        else dir = [[8, 1, 2], [7, 0, 3], [6, 5, 4]][Math.sign(Math.abs(dy) <= step ? 0 : dy) + 1]![Math.sign(Math.abs(dx) <= step ? 0 : dx) + 1]!;
+        if (!a.path) a.path = it.plan(w, it.celH(ego), { x: a.x, y: a.y }, { x: a.target.x - w / 2, y: a.target.y });
+        while (a.path.length && a.path[0]!.x === a.x && a.path[0]!.y === a.y) a.path.shift();
+        if (!a.path.length) { a.target = null; a.path = undefined; dir = 0; }
+        else {
+          const wp = a.path[Math.min(step, a.path.length) - 1]!;
+          dir = [[8, 1, 2], [7, 0, 3], [6, 5, 4]][Math.sign(wp.y - a.y) + 1]![Math.sign(wp.x - a.x) + 1]!;
+        }
         a.dir = dir;
       }
       if (dir === 0) { a.cel = 0; continue; }

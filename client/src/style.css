@@ -65,3 +65,4 @@ button, input { font: inherit; color: inherit; }
 #dialogue img.obj { image-rendering: pixelated; height: 120px; float: left; margin-right: 14px; }
 #dialogue input.prompt { margin-top: 8px; width: 100%; background: #120f17; border: 1px solid var(--accent); border-radius: 4px; padding: 6px 8px; font-size: 15px; }
 #agi-roster { font-size: 12px; color: var(--dim); }
+#lobby .note { color: var(--dim); font-size: 12px; text-align: center; }

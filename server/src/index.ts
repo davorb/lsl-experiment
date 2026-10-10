@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { ClientMessageSchema, CODE_RE, parseWith, type ServerMessage } from '../../shared/protocol';
+import { ClientMessageSchema, parseWith, type ServerMessage } from '../../shared/protocol';
 import { CONTENT_DIR, ROOT } from './content';
 import { Registry } from './session';
 
@@ -45,7 +45,7 @@ function reply(ws: WebSocket, msg: ServerMessage): void {
 }
 
 wss.on('connection', (ws) => {
-  let session: ReturnType<Registry['getOrCreate']> = null;
+  let session: ReturnType<Registry['global']> = null;
   let playerId: string | null = null;
 
   ws.on('message', (data, isBinary) => {
@@ -55,10 +55,8 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'hello') {
       if (session) return;
-      const code = msg.code.trim().toUpperCase();
-      if (!CODE_RE.test(code)) return reply(ws, { type: 'error', message: 'Room code must be 4 letters.' });
-      const s = registry.getOrCreate(code);
-      if (!s) return reply(ws, { type: 'error', message: 'Server is full.' });
+      const s = registry.global();
+      if (!s) return reply(ws, { type: 'error', message: 'Server is not ready.' });
       const joined = s.join(ws, msg.name);
       if (typeof joined === 'string') return reply(ws, { type: 'error', message: joined });
       session = s;

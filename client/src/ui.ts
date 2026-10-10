@@ -54,23 +54,9 @@ export class UI {
   }
 
   private buildLobby(app: HTMLElement): void {
-    const name = el<HTMLInputElement>('input', { name: 'name', placeholder: 'Your name (optional)', maxLength: 16 });
-    const code = el<HTMLInputElement>('input', { name: 'code', placeholder: 'CODE', maxLength: 4 });
-    try { name.value = localStorage.getItem('lsl.name') ?? ''; } catch { /* storage unavailable */ }
-    const fromUrl = (location.hash.slice(1) || new URLSearchParams(location.search).get('code') || '').toUpperCase();
-    if (/^[A-Z]{4}$/.test(fromUrl)) code.value = fromUrl;
-    const join = (c: string) => {
-      if (!/^[A-Za-z]{4}$/.test(c)) { this.err.textContent = 'Room code is 4 letters.'; return; }
-      try { localStorage.setItem('lsl.name', name.value); } catch { /* ignore */ }
-      this.err.textContent = '';
-      this.h.onJoin(c.toUpperCase(), name.value.trim());
-    };
-    const create = el<HTMLButtonElement>('button', { type: 'button', textContent: 'New room' });
-    create.onclick = () => join(Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join(''));
-    const go = el<HTMLButtonElement>('button', { type: 'submit', textContent: 'Join' });
-    const form = el<HTMLFormElement>('form', {}, el('h1', { textContent: 'Larry Co-op' }), name, code, el('div', { className: 'row' }, go, create), this.err);
-    form.onsubmit = (e) => { e.preventDefault(); join(code.value); };
-    this.lobby.append(form);
+    // The entry point owns the real lobby; this hidden shell only receives reconnect errors.
+    this.lobby.append(el('form', {}, el('h1', { textContent: 'Larry Co-op' }), this.err));
+    this.lobby.style.display = 'none';
     app.append(this.lobby);
   }
 
@@ -108,7 +94,8 @@ export class UI {
 
   setMeta(code: string, flags: Flags): void {
     const on = Object.entries(flags).filter(([, v]) => v).map(([k]) => k);
-    this.meta.replaceChildren('Room ', el('b', { textContent: code }), ' · share this URL: ', el('b', { textContent: `${location.origin}/#${code}` }), el('br'), `flags: ${on.join(', ') || '—'}`);
+    void code;
+    this.meta.replaceChildren('Shared game · ', el('b', { textContent: location.origin }), el('br'), `flags: ${on.join(', ') || '—'}`);
   }
 
   say(speaker: string, text: string, choices?: { id: string; label: string }[]): void {

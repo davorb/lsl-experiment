@@ -1,53 +1,50 @@
 # Larry Co-op
 
-Private co-op point-and-click for 2-16 friends, HD-2D look (PixiJS), authoritative Node server. Personal use only;
-game art is never committed (`game-data/` and generated art are gitignored).
+Everyone who opens the page plays the same running copy of *Leisure Suit Larry in the Land of the Lounge Lizards*
+(AGI version), together, in the browser. The original game logic runs on a Node server; clients get an HD-2D
+rendering (PixiJS), the original menus and status line, and the original PCjr music through WebAudio.
+Personal use only: game data is never committed (`game-data/` and everything generated from it are gitignored).
 
 ```bash
 npm install
-npm run extract   # once, if ./game-data contains your LSL1 (AGI) install; see tools/README.md
+npm run extract   # once: reads ./game-data (your LSL1 install) and writes the gitignored content/ files
 npm run dev       # server :8787, client :5173 (LAN-reachable)
 ```
 
-Open `http://<host>:5173`, press **New room**, and send friends the URL (`/#CODE`). Without game data the app boots
-into two placeholder rooms (lobby, hall). `LSL_START=pic08 npm run dev` starts in an extracted room.
+Open `http://<host>:5173`, enter a name, join. There are no room codes: it is one global game, and it
+**restarts every two hours** (players get a chat warning five minutes before). A game with nobody in it for ten
+minutes is discarded too. `npm start` builds the client and serves everything from the Node server (`PORT`, default 8787).
 
-`npm start` builds the client and serves everything from the Node server on `PORT` (default 8787).
+## How it plays
 
-## What is playable
-
-A three-room slice of LSL1 (run `npm run extract` first; without game data the rooms fall back to placeholder art):
-`lsl_street` <-> `lsl_outside` -> `lsl_bar`, with the original's characters and props placed where the original
-logic places them: Lefty, the customers (the blonde, the bore on the next stool), the juke box, the ceiling fan, the
-neon signs, the naugahyde door, and the bum outside the store.
-
-- **Sit** on the empty stool, **talk** to Lefty and order (whiskey is $3 and is carried as a shared item), tip the
-  juke box, talk to the bum (give him a dollar or the whiskey), or **knock** on the naugahyde door and answer the
-  peephole. Giving the right password ends the slice.
-- Cash, inventory and flags are shared by the whole session; positions, rooms and sitting are per player.
-- Click an inventory item to look at it.
-
-**Game text**: all dialogue and descriptions are the original's, read at run time from `content/text/` (written by
-`npm run extract` from your own `game-data/`, gitignored like the art). Scripts reference lines by AGI message
-number (`ctx.text(15, 21)`), so no game text is committed. Choice labels, the slice-end note and the cash amount are
-the only invented strings. The rest of the game's rooms are extracted as backgrounds only.
-
-Engine pieces behind it: hotspots walk the actor to them first (`at`); script results can carry `choices`,
-`pose` (sit/stand), `go` (change room) and `inventory`/`flags` changes; rooms can declare `props` (animated or still
-view cels placed with the original AGI coordinates) and a `priority` map from the picture, so a pole or a bar counter
-draws over actors that are further back (priority is derived from foot Y, like AGI).
+- It is the real game: type commands in the command line (`look`, `open door`, `talk to bartender`) or use the
+  quick buttons; the original's menus (Sierra, File, Action, Special, Speed) are along the top. Dialogs block the
+  game until someone clicks or presses Enter; typed answers (age check, prompts) come from whoever is Larry.
+- **Click** the picture, or use the **arrow keys**, to walk. Clicking uses pathfinding over the picture's
+  barrier data, so Larry walks around obstacles.
+- Co-op: the game has one Larry. The first player to join is Larry; everyone else walks their own character around
+  the same room. **Typing a command takes over Larry** (he swaps places with you), so the role is passed around
+  naturally. When Larry leaves a room everyone arrives together. Chat is below the picture (chat bubbles over heads).
+- Cash, inventory, score and every other piece of game state are shared by everybody.
+- Music and sound effects are the original's, synthesized in the browser; the ♪ button mutes.
 
 ## Layout
 
-- `shared/protocol.ts` zod schemas for every message plus room/index formats (strict: unknown fields are rejected)
-- `server/` Node + `ws`: sessions by 4-letter code, 10 Hz ticks, A* on a 4px grid, scripts from `content/scripts/*.js`
-- `client/` Vite + PixiJS v8: integer zoom, nearest scaling, y-sort, masks, lights, tilt-shift, vignette, DOM UI
-- `tools/` extractor
-- `content/` `index.json`, `rooms/*.json`, `scripts/*.js`; generated `backgrounds/ sprites/ masks/` are ignored
+- `server/src/agi/` the AGI interpreter: bytecode VM (`interp.ts`), objects/collision/animation, the text
+  parser, pathfinding, and the per-game session (`session.ts`: modal dialogs, ego hand-over, avatars)
+- `shared/` wire protocol (zod, strict) and the AGI format parsers (pictures, views, logic, sound) used by the
+  extractor, server and client
+- `client/` Vite + PixiJS v8: scene (priority-layer depth sorting, HD-2D lights, tilt-shift, vignette), DOM UI, sound
+- `tools/` the extractor and `dump-logic` (a read-only disassembler used to understand the game)
+- `content/` generated and gitignored, except the small placeholder files (see below)
 
-## Notes
+## Dev switches (environment variables for the server)
 
-- Scripts: hotspot `script: "lobby.door"` loads `content/scripts/lobby.js` and calls the export named after the verb
-  (`use`, `look`, ...) with `{ state, actorId, hotspotId }`. Return `{ say, flags, inventory: { add, remove } }`.
-- Exits may carry `requires: "<flag>"`; a clicked exit walks there first and leaves on arrival.
-- A room with an empty `walk` polygon (fresh extraction stub) is walkable everywhere.
+- `LSL_SKIP_INTRO=1` start past the title and age quiz; `LSL_DEV=1` enables `/room N` in chat to jump to a room
+- `LSL_RESET_MS=60000` change the reset interval; `LSL_MODE=legacy` run the older hand-authored placeholder engine
+
+## Legacy placeholder engine
+
+Without extracted data (`content/agi/`), or with `LSL_MODE=legacy`, the server falls back to the earlier
+hand-authored engine (two placeholder rooms, scripts in `content/scripts/`) so the app still boots with zero game
+data. See `tools/README.md` for the extractor and for how the AGI logic was read.

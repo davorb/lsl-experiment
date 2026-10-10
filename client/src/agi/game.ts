@@ -167,7 +167,7 @@ export class AgiGame {
   private renderRoster(): void {
     const owner = this.frame?.egoOwner ?? null;
     const parts = Object.entries(this.names).map(([id, name]) => `${name}${id === this.me ? ' (you)' : ''}${id === owner ? ' ★ Larry' : ''}`);
-    this.roster.textContent = `In this game: ${parts.join(' · ') || '—'}. Type a command to take over Larry; otherwise walk your own character.`;
+    this.roster.textContent = `In this game: ${parts.join(' · ') || '—'}. Type a command to take over Larry, or just walk around as yourself.`;
   }
 
   private renderMenus(f: AgiFrame): void {

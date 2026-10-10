@@ -6,6 +6,7 @@
 import { PIC_H, PIC_W, PicBuffers, drawPicture } from '../../../shared/agi/picture';
 import type { ParsedLogic } from '../../../shared/agi/logic';
 import { matchSaid, parseLine, type ParsedLine } from './parser';
+import { findPath, type Pt } from './pathfind';
 import type { AgiResources } from './resources';
 
 export const DX = [0, 0, 1, 1, 1, 0, -1, -1, -1];
@@ -107,6 +108,11 @@ export class AgiInterp {
   quitRequested = false;
   // goto-target for click-to-walk (AGI coordinates)
   walkTarget: { x: number; y: number } | null = null;
+  private walkPath: Pt[] | null = null;
+  private walkStuck = 0;
+  private walkRetries = 0;
+  private lastEgoX = -1;
+  private lastEgoY = -1;
 
   private keyMap = new Map<string, number>();
   private controllers = new Set<number>();
@@ -174,9 +180,23 @@ export class AgiInterp {
     const c = this.keyMap.get(`${ascii}:${scan}`) ?? this.keyMap.get(`${ascii}:0`) ?? this.keyMap.get(`0:${scan}`);
     if (c !== undefined) this.controllers.add(c);
   }
+  /** Click-to-walk: aim the ego at a point (centre of the sprite, AGI units). Pathfinding runs on the next cycle. */
+  setWalkTarget(t: { x: number; y: number } | null): void {
+    this.walkTarget = t;
+    this.walkPath = null;
+    this.walkStuck = 0;
+    this.walkRetries = 0;
+    if (t && this.playerControl) this.vars[6] = 0;
+  }
+
+  /** Plan a path for a sprite of the given size (used for the other players' avatars too). */
+  plan(w: number, h: number, from: Pt, to: Pt, ignoreHorizon = false): Pt[] {
+    return findPath({ pri: this.pic.priority, w, h, horizon: this.horizon, ignoreHorizon, block: this.block }, from, to);
+  }
+
   /** Direction from arrow keys (0 = stop). Only applies while the player is in control. */
   setDirection(d: number): void {
-    this.walkTarget = null;
+    this.setWalkTarget(null);
     if (this.playerControl) this.vars[6] = d;
   }
 
@@ -240,17 +260,38 @@ export class AgiInterp {
   private driveEgo(): void {
     const ego = this.objs[0]!;
     if (this.playerControl) {
-      if (this.walkTarget && ego.drawn) {
-        const dx = this.walkTarget.x - (ego.x + this.celW(ego) / 2);
-        const dy = this.walkTarget.y - ego.y;
-        if (Math.abs(dx) <= Math.max(1, ego.stepSize) && Math.abs(dy) <= Math.max(1, ego.stepSize)) { this.walkTarget = null; this.vars[6] = 0; }
-        else this.vars[6] = dirFromDelta(Math.abs(dx) <= ego.stepSize ? 0 : dx, Math.abs(dy) <= ego.stepSize ? 0 : dy);
-      }
+      if (this.walkTarget && ego.drawn) this.followWalkTarget(ego);
       ego.dir = this.vars[6]! <= 8 ? this.vars[6]! : 0;
       if (ego.motion === 'none' || ego.motion === 'move' && !ego.drawn) ego.motion = 'normal';
     } else {
       this.vars[6] = ego.dir;
     }
+  }
+
+  private followWalkTarget(ego: ViewObj): void {
+    const w = this.celW(ego), h = this.celH(ego);
+    const goal = { x: this.walkTarget!.x - w / 2, y: this.walkTarget!.y };
+    if (!this.walkPath) {
+      this.walkPath = this.plan(w, h, { x: ego.x, y: ego.y }, goal, ego.ignoreHorizon);
+      if (!this.walkPath.length) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+    }
+    const step = Math.max(1, ego.stepSize);
+    // Advance only when exactly on a waypoint: cutting corners can step into a barrier the path went around.
+    while (this.walkPath.length && this.walkPath[0]!.x === ego.x && this.walkPath[0]!.y === ego.y) this.walkPath.shift();
+    if (!this.walkPath.length) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+    // Blocked by something the planner cannot see (a moving object): re-plan a few times, then give up.
+    if (ego.x === this.lastEgoX && ego.y === this.lastEgoY) {
+      if (++this.walkStuck > 8) {
+        this.walkStuck = 0;
+        if (++this.walkRetries > 3) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+        this.walkPath = this.plan(w, h, { x: ego.x, y: ego.y }, goal, ego.ignoreHorizon);
+        if (!this.walkPath.length) { this.setWalkTarget(null); this.vars[6] = 0; return; }
+      }
+    } else this.walkStuck = 0;
+    this.lastEgoX = ego.x;
+    this.lastEgoY = ego.y;
+    const wp = this.walkPath[Math.min(step, this.walkPath.length) - 1]!;
+    this.vars[6] = dirFromDelta(wp.x - ego.x, wp.y - ego.y);
   }
 
   // ---- logic execution --------------------------------------------------------------

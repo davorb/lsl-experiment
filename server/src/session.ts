@@ -107,6 +107,25 @@ export class Session {
     }
   }
 
+  announce(text: string): void {
+    this.broadcast({ type: 'chat', entry: { id: 'sys', name: 'Game', text, t: Date.now() } });
+  }
+
+  /** Start over: clear flags and inventory and send everyone back to the start room. */
+  hardReset(): void {
+    const idx = loadIndex();
+    this.flags = { ...(idx.startFlags ?? {}) };
+    this.inventory = [...(idx.startInventory ?? [])];
+    this.startRoom = idx.start;
+    for (const c of this.conns.values()) {
+      const [x, y] = this.spawnPoint(this.startRoom);
+      c.path = [];
+      c.p = { ...c.p, roomId: this.startRoom, x, y, anim: 'idle' };
+    }
+    this.broadcast({ type: 'patch', flags: this.flags, inventory: this.inventory, players: Object.fromEntries([...this.conns.values()].map((c) => [c.id, c.p])) });
+    this.announce('The game has restarted.');
+  }
+
   /** Dispatch a post-hello client message (legacy placeholder engine). */
   handle(id: string, msg: ClientMessage): void {
     switch (msg.type) {
@@ -299,23 +318,45 @@ export class Session {
   }
 }
 
-export class Registry {
-  private sessions = new Map<string, Session | AgiSession>();
-  private res: AgiResources | null = null;
+/** How often the shared game starts over, and how long before that players are warned. */
+export const RESET_EVERY_MS = Number(process.env.LSL_RESET_MS) || 2 * 60 * 60 * 1000;
+const RESET_WARN_MS = Math.min(5 * 60 * 1000, RESET_EVERY_MS / 2);
+const GLOBAL = 'GAME';
 
-  getOrCreate(code: string): Session | AgiSession | null {
-    let s = this.sessions.get(code);
-    if (!s) {
-      if (this.sessions.size >= MAX_SESSIONS) return null;
-      const drop = (c: string) => this.sessions.delete(c);
+/** One global game for everybody. It restarts every couple of hours so it never gets stuck for good. */
+export class Registry {
+  private game: Session | AgiSession | null = null;
+  private res: AgiResources | null = null;
+  private startedAt = Date.now();
+
+  constructor() {
+    setInterval(() => this.checkReset(), Math.min(15_000, RESET_EVERY_MS / 4)).unref();
+  }
+
+  global(): Session | AgiSession | null {
+    if (!this.game) {
+      this.startedAt = Date.now();
+      const drop = () => { this.game = null; };
       if (agiAvailable() && process.env.LSL_MODE !== 'legacy') {
         this.res ??= new AgiResources();
-        s = new AgiSession(code, this.res, drop);
+        this.game = new AgiSession(GLOBAL, this.res, drop);
       } else {
-        s = new Session(code, drop);
+        this.game = new Session(GLOBAL, drop);
       }
-      this.sessions.set(code, s);
     }
-    return s;
+    return this.game;
+  }
+
+  private warned = false;
+  private checkReset(): void {
+    const g = this.game;
+    if (!g) return;
+    const left = this.startedAt + RESET_EVERY_MS - Date.now();
+    if (left <= RESET_WARN_MS && !this.warned) { this.warned = true; g.announce(`The game restarts in ${Math.max(1, Math.round(RESET_WARN_MS / 60000))} minute${RESET_WARN_MS >= 90_000 ? 's' : ''}.`); }
+    if (left <= 0) {
+      this.warned = false;
+      this.startedAt = Date.now();
+      g.hardReset();
+    }
   }
 }

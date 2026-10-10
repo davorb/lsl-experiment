@@ -9,7 +9,7 @@ void parseWith;
 const net = new Net();
 const synth = new Synth();
 
-const lobby: Lobby = new Lobby(async (code, name) => {
+const lobby: Lobby = new Lobby(async (name) => {
   synth.unlock(); // the join click is the user gesture browsers require for audio
   try {
     await net.connect();
@@ -29,6 +29,6 @@ const lobby: Lobby = new Lobby(async (code, name) => {
       new Game(net).begin(m);
     }
   };
-  const hello: ClientMessage = { type: 'hello', code, name: name || undefined };
+  const hello: ClientMessage = { type: 'hello', name: name || undefined };
   net.send(hello);
 });

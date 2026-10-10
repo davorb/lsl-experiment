@@ -50,7 +50,7 @@ export type SessionState = z.infer<typeof StateSchema>;
 // ---- client -> server ------------------------------------------------------
 
 export const ClientMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('hello'), code: z.string(), name: z.string().optional() }).strict(),
+  z.object({ type: z.literal('hello'), code: z.string().optional(), name: z.string().optional() }).strict(),
   z.object({ type: z.literal('input'), seq: z.number().int(), x: z.number(), y: z.number() }).strict(),
   z.object({ type: z.literal('verb'), hotspotId: z.string(), verb: VerbSchema }).strict(),
   z.object({ type: z.literal('chat'), text: z.string() }).strict(),

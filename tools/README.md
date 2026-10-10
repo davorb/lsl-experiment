@@ -27,6 +27,11 @@ Detection order:
 3. **Pre-extracted PNGs**: PNGs anywhere under `game-data/`. Files under `backgrounds/` (or any PNG 256px+ wide) become
    backgrounds; `sprites/<view>/<cel>.png` are copied as is. Sidecar `view.json` files are not synthesized.
 
+## What the AGI extraction writes
+
+`content/agi/{logic,pic,view,snd}/<n>.bin` raw resources and `words.bin` / `object.bin` (the interpreter runs from
+these), `content/sprites/<view>/` PNG cels the client draws, plus `content/text/` message tables. All gitignored.
+
 ## Reading the original's logic
 
 `npx tsx tools/src/dump-logic.ts 15` prints a readable disassembly of AGI logic 15 (the bar): `said()` patterns
