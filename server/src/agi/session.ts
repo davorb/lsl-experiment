@@ -52,6 +52,7 @@ export class AgiSession {
   private startedAt = Date.now();
   private waiting = false;
   private lastFrameText = '';
+  private needGather = false;
 
   constructor(readonly code: string, res: AgiResources, private onDead: (code: string) => void) {
     this.interp = new AgiInterp(res);
@@ -100,9 +101,10 @@ export class AgiSession {
     const ego = this.interp.objs[0]!;
     const c: Conn = {
       id, ws, name: this.uniqueName(wantedName), lastChat: 0,
-      avatar: { x: Math.max(0, Math.min(PIC_W - 8, ego.x + 10 + 8 * this.conns.size)), y: ego.y, dir: 0, loop: 2, cel: 0, target: null },
+      avatar: { x: ego.x, y: ego.y, dir: 0, loop: 2, cel: 0, target: null },
     };
     this.conns.set(id, c);
+    if (ego.drawn) this.placeAround();
     this.owner ??= id;
     this.send(c, { type: 'agi_welcome', playerId: id, chat: this.chat });
     this.broadcastPlayers();
@@ -209,8 +211,9 @@ export class AgiSession {
     if (!this.interp.playerControl || !ego.drawn) { this.owner = c.id; return; }
     const prev = this.owner ? this.conns.get(this.owner) : null;
     if (prev) prev.avatar = { x: ego.x, y: ego.y, dir: 0, loop: ego.loop, cel: 0, target: null };
-    ego.x = c.avatar.x;
-    ego.y = c.avatar.y;
+    const spot = this.interp.snapWalkable(this.interp.celW(ego), this.interp.celH(ego), { x: c.avatar.x, y: c.avatar.y });
+    ego.x = spot.x;
+    ego.y = spot.y;
     this.interp.vars[6] = 0;
     this.interp.setWalkTarget(null);
     c.avatar.dir = 0;
@@ -285,6 +288,7 @@ export class AgiSession {
     try {
       const r = this.cycleGen.next(answer);
       if (!r.done) {
+        this.flush(); // show the current picture/text before pausing, not only at the end of a cycle
         if (r.value.kind === 'wait') { this.waiting = true; return; }
         this.openModal(r.value);
         return;
@@ -304,16 +308,17 @@ export class AgiSession {
     const roomChanged = it.vars[0] !== this.lastRoom;
     this.lastRoom = it.vars[0]!;
     const ego = it.objs[0]!;
-    // Everyone arrives together: avatars gather around Larry in the new room.
-    if (roomChanged && ego.drawn) {
-      let i = 0;
-      for (const c of this.conns.values()) {
-        if (c.id === this.owner) continue;
-        c.avatar = { x: Math.max(0, Math.min(PIC_W - 8, ego.x + ((i % 2 ? 1 : -1) * (6 + 6 * Math.floor(i / 2))))), y: ego.y, dir: 0, loop: 2, cel: 0, target: null };
-        i++;
-      }
-    }
+    // Everyone arrives together, but only once the game hands Larry back (a cutscene may still be moving
+    // him): avatars gather on walkable ground around his final spot.
+    if (roomChanged) this.needGather = true;
+    if (this.needGather && ego.drawn && it.playerControl) { this.needGather = false; this.placeAround(); }
     this.stepAvatars();
+    this.flush();
+  }
+
+  /** Send pending sounds, a changed picture and a changed frame to everyone. */
+  private flush(): void {
+    const it = this.interp;
     for (const n of it.soundQueue.splice(0)) this.broadcast({ type: 'agi_sound', n });
     if (it.picVersion !== this.sentPicVersion) this.broadcast(this.picMessage());
     const frame = this.frame();
@@ -322,6 +327,27 @@ export class AgiSession {
   }
 
   // ---- avatars (non-owner players) --------------------------------------------------------------
+
+  /** Distinct walkable spots around Larry for the other players' avatars. */
+  private placeAround(): void {
+    const it = this.interp;
+    const ego = it.objs[0]!;
+    const w = it.celW(ego), h = it.celH(ego);
+    const offsets: [number, number][] = [[10, 0], [-10, 0], [0, 8], [0, -8], [20, 0], [-20, 0], [10, 8], [-10, 8], [10, -8], [-10, -8], [0, 16], [30, 0], [-30, 0], [20, 8], [-20, 8], [0, -16]];
+    const used = new Set<string>([`${ego.x},${ego.y}`]);
+    let k = 0;
+    for (const c of this.conns.values()) {
+      if (c.id === this.owner) continue;
+      let spot = { x: ego.x, y: ego.y };
+      for (; k < offsets.length; k++) {
+        const o = offsets[k]!;
+        const cand = { x: ego.x + o[0], y: ego.y + o[1] };
+        if (it.isWalkable(w, h, cand.x, cand.y) && !used.has(`${cand.x},${cand.y}`)) { spot = cand; k++; break; }
+      }
+      c.avatar = { x: spot.x, y: spot.y, dir: 0, loop: 2, cel: 0, target: null };
+      used.add(`${spot.x},${spot.y}`);
+    }
+  }
 
   private stepAvatars(): void {
     const it = this.interp;
@@ -371,7 +397,7 @@ export class AgiSession {
       room: it.vars[0]!,
       picVersion: it.picVersion,
       objs: it.visibleObjects(),
-      texts: it.texts.map((t) => ({ ...t })),
+      texts: it.texts.filter((t) => t.screen === it.textMode).map(({ row, col, text, fg, bg }) => ({ row, col, text, fg, bg })),
       textMode: it.textMode,
       statusLine: it.statusLine,
       score: it.vars[3]!,
@@ -380,7 +406,7 @@ export class AgiSession {
       accept: it.acceptInput,
       egoOwner: this.owner,
       avatars: [...this.conns.values()]
-        .filter((c) => c.id !== this.owner)
+        .filter((c) => c.id !== this.owner && !this.needGather)
         .map((c) => ({ id: c.id, name: c.name, x: c.avatar.x, y: c.avatar.y, loop: c.avatar.loop, cel: c.avatar.cel })),
       menus: it.menus.map((m) => ({ title: m.title, items: m.items.map((i) => ({ ...i })) })),
     };

@@ -78,3 +78,22 @@ export function findPath(o: PlanOpts, from: Pt, to: Pt): Pt[] {
 
   return out;
 }
+
+/** The walkable point nearest to `p` (ring search), or null if there is none nearby. */
+export function nearestWalkable(o: PlanOpts, p: Pt): Pt | null {
+  const x0 = Math.round(p.x), y0 = Math.round(p.y);
+  if (walkable(o, x0, y0)) return { x: x0, y: y0 };
+  for (let r = 1; r < 60; r++) {
+    let best: Pt | null = null, bestD = Infinity;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        if (!walkable(o, x0 + dx, y0 + dy)) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = { x: x0 + dx, y: y0 + dy }; }
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}

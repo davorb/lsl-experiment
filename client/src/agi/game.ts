@@ -43,9 +43,11 @@ export class AgiGame {
   private chatInput = el<HTMLInputElement>('input', { id: 'agi-chat', placeholder: 'Chat with your friends (Enter)', maxLength: 200, autocomplete: 'off' });
   private pressed = new Set<string>();
   private lastDir = 0;
+  private banner = el<HTMLDivElement>('div', { id: 'agi-banner' });
 
   constructor(private net: Net, private synth: Synth, private me: string, chat: ChatEntry[]) {
     this.net.onMessage = (m) => this.handle(m);
+    this.net.onClose = () => void this.reconnect();
     for (const c of chat) this.addChat(c);
   }
 
@@ -99,7 +101,8 @@ export class AgiGame {
       e.stopPropagation();
       if (e.key === 'Enter' && this.chatInput.value.trim()) { this.net.send({ type: 'chat', text: this.chatInput.value }); this.chatInput.value = ''; }
     });
-    this.stage.append(canvas, this.texts, this.chatlog, this.modalBox);
+    this.banner.style.display = 'none';
+    this.stage.append(canvas, this.texts, this.chatlog, this.modalBox, this.banner);
     this.root.append(
       this.menubar,
       this.statusBar,
@@ -125,12 +128,38 @@ export class AgiGame {
     this.net.send({ type: 'agi_cmd', text });
   }
 
+  /** The server went away (a restart, a network drop): retry until it is back, then rejoin the shared game. */
+  private reconnecting = false;
+  private async reconnect(): Promise<void> {
+    if (this.reconnecting) return;
+    this.reconnecting = true;
+    this.banner.textContent = 'Connection lost. Reconnecting…';
+    this.banner.style.display = 'block';
+    this.closeModal();
+    for (let attempt = 0; ; attempt++) {
+      await new Promise((r) => setTimeout(r, Math.min(5000, 1000 + attempt * 500)));
+      try {
+        await this.net.connect();
+      } catch { continue; }
+      let name: string | undefined;
+      try { name = localStorage.getItem('lsl.name') || undefined; } catch { /* storage unavailable */ }
+      this.net.send({ type: 'hello', name });
+      this.reconnecting = false;
+      return;
+    }
+  }
+
   // ---- server messages -----------------------------------------------------------------------------
 
   private handle(m: ServerMessage): void {
     // The server sends the picture right after the welcome, before the renderer has finished starting.
     if (!this.ready) { this.queue.push(m); return; }
     switch (m.type) {
+      case 'agi_welcome':
+        this.me = m.playerId;
+        for (const k of Object.keys(this.names)) delete this.names[k];
+        this.banner.style.display = 'none';
+        break;
       case 'agi_pic': this.scene.setPicture(b64(m.visual), b64(m.priority)); break;
       case 'agi_frame': this.onFrame(m.frame); break;
       case 'agi_modal': this.openModal(m.mid, m.modal, m.owner); break;
@@ -178,11 +207,13 @@ export class AgiGame {
       ...f.menus.map((menu) => {
         const items = el<HTMLDivElement>('div', { className: 'menu-items' });
         for (const it of menu.items) {
-          const b = el<HTMLButtonElement>('button', { type: 'button', textContent: it.text, disabled: !it.enabled });
+          if (/^-+$/.test(it.text.trim())) { items.append(el('hr')); continue; }
+          const [label, hint] = it.text.trim().split(/\s{2,}/);
+          const b = el<HTMLButtonElement>('button', { type: 'button', disabled: !it.enabled }, label ?? '', ...(hint ? [el('span', { className: 'key', textContent: hint.replace(/[<>]/g, '') })] : []));
           b.onclick = () => this.net.send({ type: 'agi_menu', controller: it.controller });
           items.append(b);
         }
-        return el<HTMLDivElement>('div', { className: 'menu' }, el('span', { textContent: menu.title }), items);
+        return el<HTMLDivElement>('div', { className: 'menu' }, el('span', { textContent: menu.title.trim() }), items);
       }),
     );
   }

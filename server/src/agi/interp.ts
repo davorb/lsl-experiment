@@ -6,7 +6,7 @@
 import { PIC_H, PIC_W, PicBuffers, drawPicture } from '../../../shared/agi/picture';
 import type { ParsedLogic } from '../../../shared/agi/logic';
 import { matchSaid, parseLine, type ParsedLine } from './parser';
-import { findPath, type Pt } from './pathfind';
+import { findPath, nearestWalkable, walkable, type Pt } from './pathfind';
 import type { AgiResources } from './resources';
 
 export const DX = [0, 0, 1, 1, 1, 0, -1, -1, -1];
@@ -71,7 +71,7 @@ const newObj = (): ViewObj => ({
 
 export type PicOp = { kind: 'draw' | 'overlay'; pic: number } | { kind: 'add'; view: number; loop: number; cel: number; x: number; y: number; pri: number };
 
-export interface DisplayText { row: number; col: number; text: string; fg: number; bg: number }
+export interface DisplayText { row: number; col: number; text: string; fg: number; bg: number; screen: boolean }
 export interface MenuDef { title: string; items: { text: string; controller: number; enabled: boolean }[] }
 
 class NewRoomSignal {}
@@ -175,10 +175,11 @@ export class AgiInterp {
   }
   /** Key event from the client (function keys etc.): maps through set.key and records have.key. */
   pressKey(ascii: number, scan: number): void {
+    const c = this.keyMap.get(`${ascii}:${scan}`) ?? this.keyMap.get(`${ascii}:0`) ?? this.keyMap.get(`0:${scan}`);
+    // A key bound to a controller is consumed by that binding, so it does not also satisfy have.key().
+    if (c !== undefined) { this.controllers.add(c); return; }
     this.keyHit = true;
     this.vars[19] = ascii & 0xff;
-    const c = this.keyMap.get(`${ascii}:${scan}`) ?? this.keyMap.get(`${ascii}:0`) ?? this.keyMap.get(`0:${scan}`);
-    if (c !== undefined) this.controllers.add(c);
   }
   /** Click-to-walk: aim the ego at a point (centre of the sprite, AGI units). Pathfinding runs on the next cycle. */
   setWalkTarget(t: { x: number; y: number } | null): void {
@@ -187,6 +188,17 @@ export class AgiInterp {
     this.walkStuck = 0;
     this.walkRetries = 0;
     if (t && this.playerControl) this.vars[6] = 0;
+  }
+
+  private planOpts(w: number, h: number, ignoreHorizon = false) {
+    return { pri: this.pic.priority, w, h, horizon: this.horizon, ignoreHorizon, block: this.block };
+  }
+  isWalkable(w: number, h: number, x: number, y: number): boolean {
+    return walkable(this.planOpts(w, h), x, y);
+  }
+  /** The walkable position nearest to p for a sprite of this size (p itself if already valid). */
+  snapWalkable(w: number, h: number, p: Pt): Pt {
+    return nearestWalkable(this.planOpts(w, h), p) ?? p;
   }
 
   /** Plan a path for a sprite of the given size (used for the other players' avatars too). */
@@ -555,7 +567,7 @@ export class AgiInterp {
       case 104: this.display(v[a[0]!]!, v[a[1]!]!, this.msg(lg, v[a[2]!]!)); return;
       case 105: this.texts = this.texts.filter((t) => t.row < a[0]! || t.row > a[1]!); return;
       case 106: this.textMode = true; return;
-      case 107: this.textMode = false; return;
+      case 107: this.textMode = false; this.texts = this.texts.filter((t) => !t.screen); return;
       case 108: return; // set.cursor.char
       case 109: this.textFg = a[0]!; this.textBg = a[1]!; return;
       case 110: return; // shake.screen
@@ -642,8 +654,8 @@ export class AgiInterp {
   }
 
   private display(row: number, col: number, text: string): void {
-    this.texts = this.texts.filter((t) => !(t.row === row && t.col === col));
-    this.texts.push({ row, col, text, fg: this.textFg, bg: this.textBg });
+    this.texts = this.texts.filter((t) => !(t.row === row && t.col === col && t.screen === this.textMode));
+    this.texts.push({ row, col, text, fg: this.textFg, bg: this.textBg, screen: this.textMode });
   }
 
   private drawPic(n: number): void {

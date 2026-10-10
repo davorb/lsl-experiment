@@ -10,9 +10,11 @@ export class Net {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
       this.ws = ws;
-      ws.onopen = () => resolve();
-      ws.onerror = () => reject(new Error('Could not reach the server.'));
-      ws.onclose = () => this.onClose();
+      // A proxy can leave a socket "connecting" forever while the server is down: give up after a few seconds.
+      const timer = setTimeout(() => { if (ws.readyState !== WebSocket.OPEN) { ws.close(); reject(new Error('Could not reach the server.')); } }, 4000);
+      ws.onopen = () => { clearTimeout(timer); resolve(); };
+      ws.onerror = () => { clearTimeout(timer); reject(new Error('Could not reach the server.')); };
+      ws.onclose = () => { if (this.ws === ws) this.onClose(); };
       ws.onmessage = (e) => {
         if (typeof e.data !== 'string') return;
         const msg = parseWith(ServerMessageSchema, e.data);
