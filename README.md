@@ -22,6 +22,9 @@ minutes is discarded too. `npm start` builds the client and serves everything fr
   game until someone clicks or presses Enter; typed answers (age check, prompts) come from whoever is Larry.
 - The game starts the original way: title screen, then the age check and its five trivia questions. Answer the
   questions by **pressing a, b, c or d** (the game reads the key). Fail twice and it restarts, as in the original.
+- Works on phones: the picture scales to the screen (a fractional fit on small screens, integer zoom on big ones),
+  **tap** the picture to walk, dialogs sit below the picture, and in landscape the controls move beside it. When the
+  game waits for a keypress (the age quiz) on-screen A/B/C/D/Enter keys appear.
 - **Click** the picture, or use the **arrow keys**, to walk. Clicking uses pathfinding over the picture's
   barrier data, so Larry walks around obstacles.
 - Co-op: the game has one Larry. The first player to join is Larry; everyone else walks their own character around

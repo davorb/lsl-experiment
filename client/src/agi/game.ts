@@ -5,7 +5,8 @@ import type { AgiFrame, AgiModal } from '../../../shared/agi/protocol';
 import type { ChatEntry, ServerMessage } from '../../../shared/protocol';
 import type { Net } from '../net';
 import { AgiScene } from './scene';
-import { Synth } from './sound';
+import { Synth, scheduleSound } from './sound';
+import { parseSound } from '../../../shared/agi/sound';
 
 const b64 = (s: string): Uint8Array => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const rgb = (c: number): string => `rgb(${EGA[c & 15]!.join(',')})`;
@@ -35,6 +36,7 @@ export class AgiGame {
   private menubar = el<HTMLDivElement>('div', { id: 'agi-menubar' });
   private statusBar = el<HTMLDivElement>('div', { id: 'agi-status' });
   private roster = el<HTMLDivElement>('div', { id: 'agi-roster' });
+  private keys = el<HTMLDivElement>('div', { id: 'agi-keys' });
   private stage = el<HTMLDivElement>('div', { id: 'stage' });
   private texts = el<HTMLDivElement>('div', { id: 'agi-texts' });
   private modalBox = el<HTMLDivElement>('div', { id: 'dialogue' });
@@ -60,6 +62,8 @@ export class AgiGame {
     this.buildDom(app.canvas);
     this.layout();
     window.addEventListener('resize', () => this.layout());
+    window.addEventListener('orientationchange', () => setTimeout(() => this.layout(), 150));
+    window.visualViewport?.addEventListener('resize', () => this.layout());
     window.addEventListener('keydown', (e) => this.keydown(e));
     window.addEventListener('keyup', (e) => this.keyup(e));
     app.canvas.addEventListener('pointerdown', (e) => this.click(e));
@@ -91,6 +95,8 @@ export class AgiGame {
     verb('Inventory', 'inventory', true);
     const mute = el<HTMLButtonElement>('button', { type: 'button', textContent: '♪ on', title: 'Toggle music' });
     mute.onclick = () => { this.synth.setMuted(!this.synth.muted); mute.textContent = this.synth.muted ? '♪ off' : '♪ on'; };
+    mute.className = 'mute';
+    verbs.append(mute);
     this.cmdInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') { this.sendCommand(this.cmdInput.value); this.cmdInput.value = ''; }
@@ -101,6 +107,13 @@ export class AgiGame {
       e.stopPropagation();
       if (e.key === 'Enter' && this.chatInput.value.trim()) { this.net.send({ type: 'chat', text: this.chatInput.value }); this.chatInput.value = ''; }
     });
+    // Keys for screens that wait for a keypress (the age quiz, "press any key"): phones have no keyboard to hand.
+    for (const [label, ascii] of [['A', 97], ['B', 98], ['C', 99], ['D', 100], ['Enter ⏎', 13]] as const) {
+      const b = el<HTMLButtonElement>('button', { type: 'button', textContent: label });
+      b.onclick = () => this.net.send({ type: 'agi_key', ascii, scan: ascii === 13 ? 28 : 0 });
+      this.keys.append(b);
+    }
+    this.keys.style.display = 'none';
     this.banner.style.display = 'none';
     this.stage.append(canvas, this.texts, this.chatlog, this.modalBox, this.banner);
     this.root.append(
@@ -108,18 +121,45 @@ export class AgiGame {
       this.statusBar,
       this.stage,
       this.roster,
-      el<HTMLDivElement>('div', { id: 'agi-bar' }, verbs, mute),
+      this.keys,
+      el<HTMLDivElement>('div', { id: 'agi-bar' }, verbs),
       el<HTMLDivElement>('div', { id: 'agi-inputs' }, this.cmdInput, this.chatInput),
     );
     this.modalBox.style.display = 'none';
   }
 
+  /** Fit the picture to the screen: integer zoom when there is room (crisp pixels), a fractional fit on phones. */
   private layout(): void {
-    this.zoom = Math.max(2, Math.floor(Math.min(window.innerWidth / 320, (window.innerHeight - 190) / 168)));
-    this.stage.style.width = `${320 * this.zoom}px`;
-    this.stage.style.height = `${168 * this.zoom}px`;
-    this.root.style.width = `${320 * this.zoom}px`;
-    this.scene.setZoom(this.zoom);
+    const vw = window.innerWidth;
+    const vh = window.visualViewport?.height ?? window.innerHeight;
+    const pad = vw < 700 ? 8 : 24;
+    // Short landscape screens (phones on their side): picture on the left, controls in a column on the right.
+    const side = vh < 480 && vw > vh;
+    const compact = vw < 700 && !side;
+    const fit = (uiHeight: number): number => {
+      let z = side ? Math.min((vw * 0.6) / 320, (vh - 44) / 168) : Math.min((vw - 2 * pad) / 320, (vh - uiHeight) / 168);
+      z = z >= 2 ? Math.floor(z) : Math.max(0.75, z);
+      return Math.floor(320 * z) / 320; // whole-pixel width
+    };
+    const apply = (z: number) => {
+      this.zoom = z;
+      this.stage.style.width = `${Math.round(320 * z)}px`;
+      this.stage.style.height = `${Math.round(168 * z)}px`;
+      this.root.style.width = side ? '100%' : `${Math.round(320 * z)}px`;
+      this.scene.setZoom(z);
+    };
+    this.root.classList.toggle('side', side);
+    this.root.classList.toggle('compact', compact || side);
+    // Dialogs sit beside/below the picture on small screens instead of covering it.
+    const inline = compact || side;
+    if (inline && this.modalBox.parentElement !== this.root) this.root.insertBefore(this.modalBox, this.stage.nextSibling);
+    if (!inline && this.modalBox.parentElement !== this.stage) this.stage.append(this.modalBox);
+    // First guess with a typical chrome height, then correct once using the real measured height.
+    apply(fit(this.zoom ? Math.max(120, this.root.offsetHeight - this.stage.offsetHeight) : 190));
+    if (!side) {
+      const ui = this.root.offsetHeight - this.stage.offsetHeight;
+      if (ui > 0) apply(fit(ui + 8));
+    }
     this.renderTexts();
   }
 
@@ -129,6 +169,21 @@ export class AgiGame {
   }
 
   /** The server went away (a restart, a network drop): retry until it is back, then rejoin the shared game. */
+  /** Verification aid: render a sound with the real synth code into an offline buffer and return its samples. */
+  async renderSoundOffline(n: number, seconds: number): Promise<{ sampleRate: number; samples: Float32Array }> {
+    const r = await fetch(`/content/agi/snd/${n}.bin`);
+    const snd = parseSound(new Uint8Array(await r.arrayBuffer()));
+    if (!snd) throw new Error('sound did not parse');
+    const sampleRate = 22050;
+    const ctx = new OfflineAudioContext(1, Math.ceil(sampleRate * seconds), sampleRate);
+    const master = ctx.createGain();
+    master.gain.value = 0.5;
+    master.connect(ctx.destination);
+    scheduleSound(ctx, master, snd, 0, null);
+    const buf = await ctx.startRendering();
+    return { sampleRate, samples: buf.getChannelData(0) };
+  }
+
   private reconnecting = false;
   private async reconnect(): Promise<void> {
     if (this.reconnecting) return;
@@ -189,6 +244,7 @@ export class AgiGame {
       el('span', { textContent: `Sound: ${f.soundOn ? 'on' : 'off'}` }),
     );
     this.cmdInput.disabled = !f.accept || this.modalId !== null;
+    this.keys.style.display = !f.accept && this.modalId === null && f.egoOwner === this.me ? 'flex' : 'none';
     this.renderRoster();
     this.renderMenus(f);
     this.renderTexts();

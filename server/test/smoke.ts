@@ -75,6 +75,28 @@ class Game {
   }
 }
 
+// Desk accessories (Calculator, Puzzle) and the Help screen are text screens that wait for a key.
+{
+  const t = new Game();
+  t.intro();
+  for (const [name, controller] of [['Help', 1], ['Calculator', 26], ['Puzzle', 27]] as const) {
+    t.g.pressController(controller);
+    t.g.nowMs += 50;
+    const it = t.g.cycle();
+    let r = it.next();
+    let shownTextScreen = false, rows = 0, waited = 0;
+    while (!r.done) {
+      if (r.value.kind === 'wait') {
+        waited++;
+        if (t.g.textMode && t.g.texts.some((x) => x.screen)) { shownTextScreen = true; rows = t.g.texts.filter((x) => x.screen).length; }
+        if (waited === 5) t.g.pressKey(13, 28); // dismiss
+      }
+      r = it.next(undefined);
+    }
+    check(`${name} shows a text screen and returns to the game on a key`, shownTextScreen && !t.g.textMode && t.g.texts.every((x) => !x.screen), `${rows} rows shown`);
+  }
+}
+
 // 2. every room's logic runs without throwing
 {
   const dir = path.join(CONTENT_DIR, 'agi', 'logic');

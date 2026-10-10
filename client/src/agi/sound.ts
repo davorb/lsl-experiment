@@ -1,5 +1,55 @@
 // WebAudio synth for AGI (IBM PCjr) sound resources: three square-wave voices plus a noise channel.
-import { parseSound, type NoteEvent } from '../../../shared/agi/sound';
+import { parseSound, type NoteEvent, type ParsedSound } from '../../../shared/agi/sound';
+
+const gainOf = (att: number): number => (att >= 15 ? 0 : 0.22 * Math.pow(10, (-att * 2) / 20));
+
+/**
+ * Schedule a decoded sound on any audio context (live or offline): one square-wave oscillator per voice with
+ * frequency/gain changes at each note, plus a noise channel. Returns the stop functions and the noise buffer.
+ */
+export function scheduleSound(ctx: BaseAudioContext, out: AudioNode, snd: ParsedSound, t0: number, noiseBuf: AudioBuffer | null): { stops: (() => void)[]; noiseBuf: AudioBuffer | null } {
+  const stops: (() => void)[] = [];
+  const schedule = (events: NoteEvent[], gain: GainNode, setFreq: ((e: NoteEvent, t: number) => void) | null) => {
+    gain.gain.setValueAtTime(0, t0);
+    for (const e of events) {
+      const t = t0 + e.t;
+      setFreq?.(e, t);
+      gain.gain.setValueAtTime(e.freq > 0 || !setFreq ? gainOf(e.att) : 0, t);
+    }
+    const end = events.length ? events[events.length - 1]!.t + events[events.length - 1]!.dur : 0;
+    gain.gain.setValueAtTime(0, t0 + end);
+    gain.connect(out);
+  };
+  for (const voice of snd.voices) {
+    if (!voice.length) continue;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    const g = ctx.createGain();
+    osc.connect(g);
+    schedule(voice, g, (e, t) => osc.frequency.setValueAtTime(Math.max(20, e.freq || 20), t));
+    osc.start(t0);
+    osc.stop(t0 + snd.length + 0.1);
+    stops.push(() => { osc.stop(); g.disconnect(); });
+  }
+  if (snd.noise.length) {
+    noiseBuf ??= (() => {
+      const b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return b;
+    })();
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    const g = ctx.createGain();
+    src.connect(g);
+    schedule(snd.noise, g, null);
+    src.start(t0);
+    src.stop(t0 + snd.length + 0.1);
+    stops.push(() => { src.stop(); g.disconnect(); });
+  }
+  return { stops, noiseBuf };
+}
 
 export class Synth {
   private ctx: AudioContext | null = null;
@@ -45,50 +95,8 @@ export class Synth {
     if (my !== this.token) return; // superseded while loading
     const snd = parseSound(data);
     if (!snd) return;
-    const ctx = this.ctx, out = this.master;
-    const t0 = ctx.currentTime + 0.05;
-    const gainOf = (att: number) => (att >= 15 ? 0 : 0.22 * Math.pow(10, (-att * 2) / 20));
-
-    const schedule = (events: NoteEvent[], node: AudioNode, setFreq: ((e: NoteEvent, t: number) => void) | null, gain: GainNode) => {
-      gain.gain.setValueAtTime(0, t0);
-      for (const e of events) {
-        const t = t0 + e.t;
-        setFreq?.(e, t);
-        gain.gain.setValueAtTime(e.freq > 0 || !setFreq ? gainOf(e.att) : 0, t);
-      }
-      const end = events.length ? events[events.length - 1]!.t + events[events.length - 1]!.dur : 0;
-      gain.gain.setValueAtTime(0, t0 + end);
-      gain.connect(out);
-      void node;
-    };
-
-    for (const voice of snd.voices) {
-      if (!voice.length) continue;
-      const osc = ctx.createOscillator();
-      osc.type = 'square';
-      const g = ctx.createGain();
-      osc.connect(g);
-      schedule(voice, osc, (e, t) => osc.frequency.setValueAtTime(Math.max(20, e.freq || 20), t), g);
-      osc.start(t0);
-      osc.stop(t0 + snd.length + 0.1);
-      this.stopFns.push(() => { osc.stop(); g.disconnect(); });
-    }
-    if (snd.noise.length) {
-      this.noiseBuf ??= (() => {
-        const b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-        const d = b.getChannelData(0);
-        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-        return b;
-      })();
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuf;
-      src.loop = true;
-      const g = ctx.createGain();
-      src.connect(g);
-      schedule(snd.noise, src, null, g);
-      src.start(t0);
-      src.stop(t0 + snd.length + 0.1);
-      this.stopFns.push(() => { src.stop(); g.disconnect(); });
-    }
+    const nodes = scheduleSound(this.ctx, this.master, snd, this.ctx.currentTime + 0.05, this.noiseBuf);
+    this.noiseBuf ??= nodes.noiseBuf;
+    this.stopFns.push(...nodes.stops);
   }
 }

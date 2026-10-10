@@ -60,9 +60,9 @@ export class AgiScene {
 
   setZoom(zoom: number): void {
     this.zoom = zoom;
-    this.app.renderer.resize(W * zoom, H * zoom);
+    this.app.renderer.resize(Math.round(W * zoom), Math.round(H * zoom));
     this.world.scale.set(zoom);
-    this.root.filterArea = new Rectangle(0, 0, W * zoom, H * zoom);
+    this.root.filterArea = new Rectangle(0, 0, Math.round(W * zoom), Math.round(H * zoom));
     this.tilt.setBlurTexels(1.4 * zoom * DPR);
     this.vignette.width = W * zoom;
     this.vignette.height = H * zoom;

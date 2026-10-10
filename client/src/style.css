@@ -70,3 +70,51 @@ button, input { font: inherit; color: inherit; }
 #agi-menubar .menu-items .key { float: right; margin-left: 18px; color: var(--dim); font-size: 11px; }
 #agi-menubar { display: none !important; }
 #agi-banner { position: absolute; left: 0; right: 0; top: 0; padding: 10px; text-align: center; background: #5a1d1d; color: #fff; z-index: 8; font-size: 14px; }
+
+/* ---- responsive / touch ---- */
+html, body { min-height: 100%; }
+@supports (height: 100dvh) { #app { min-height: 100dvh; } }
+#stage canvas, #stage { touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+#agi-keys { display: none; gap: 6px; flex-wrap: wrap; justify-content: center; }
+#agi-keys button { background: var(--accent); color: #1a1208; border: 0; border-radius: 6px; padding: 10px 18px; font-weight: 700; min-width: 48px; }
+#dialogue { max-height: 78%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 700px) {
+  html, body { overflow-y: auto; overflow-x: hidden; }
+  #app { justify-content: flex-start; padding: calc(8px + env(safe-area-inset-top)) 8px calc(12px + env(safe-area-inset-bottom)); gap: 6px; }
+  #agi { gap: 6px; max-width: 100%; }
+  #agi-status { font-size: 12px; padding: 3px 8px; }
+  #agi-roster { font-size: 11px; line-height: 1.35; }
+  #agi-bar { flex-direction: column; gap: 6px; }
+  #agi-verbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  #agi-bar button { min-height: 42px; padding: 6px 4px; font-size: 13px; }
+  #agi-inputs { flex-direction: column; gap: 6px; }
+  #agi-inputs input { font-size: 16px; padding: 11px 12px; } /* 16px stops iOS zooming into the field */
+  #dialogue { left: 6px; right: 6px; bottom: 6px; padding: 8px 10px; font-size: 13px; }
+  #dialogue .choices button { padding: 10px 10px; font-size: 13px; }
+  #dialogue img.obj { height: 80px; }
+  #chatlog { font-size: 10px; max-width: 70%; }
+  #lobby form { width: min(340px, 92vw); padding: 18px; }
+  #lobby input { font-size: 16px; }
+  #agi-banner { font-size: 12px; padding: 6px; }
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  #agi-roster { display: none; }
+  #agi-verbs button { padding: 4px 8px; min-height: 32px; }
+  #agi-inputs input { padding: 6px 8px; }
+}
+#agi-verbs .mute { margin-left: auto; }
+@media (max-width: 700px) { #agi-verbs .mute { margin-left: 0; } }
+#agi.compact > #dialogue { position: static; max-height: 45vh; margin: 0; }
+
+/* side-by-side landscape layout for short screens */
+#agi.side { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 10px; row-gap: 6px; align-items: start; max-width: 100%; }
+#agi.side #agi-status { grid-column: 1; grid-row: 1; }
+#agi.side #stage { grid-column: 1; grid-row: 2 / span 8; }
+#agi.side #agi-roster { display: none; }
+#agi.side > #dialogue { grid-column: 2; grid-row: 1 / span 2; position: static; max-height: 38vh; margin: 0; }
+#agi.side #agi-keys, #agi.side #agi-bar, #agi.side #agi-inputs { grid-column: 2; }
+#agi.side #agi-verbs { display: grid; grid-template-columns: repeat(3, 1fr); }
+#agi.side #agi-verbs .mute { margin-left: 0; }
+#agi.side #agi-inputs { flex-direction: column; }
+#agi.side #agi-bar { flex-direction: column; }
+@media (max-height: 480px) and (orientation: landscape) { #app { justify-content: flex-start; padding: 6px; } }
