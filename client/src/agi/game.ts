@@ -423,8 +423,7 @@ export class AgiGame {
   private click(e: PointerEvent): void {
     if (this.modalId !== null) return;
     const r = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
-    const nx = (e.clientX - r.left) / this.zoom;
-    const ny = (e.clientY - r.top) / this.zoom;
+    const [nx, ny] = this.scene.unwarp((e.clientX - r.left) / this.zoom, (e.clientY - r.top) / this.zoom);
     console.log('click native', Math.round(nx), Math.round(ny));
     this.net.send({ type: 'agi_goto', x: nx / 2, y: ny });
   }
