@@ -20,6 +20,8 @@ minutes is discarded too. `npm start` builds the client and serves everything fr
 - It is the real game: type commands in the command line (`look`, `open door`, `talk to bartender`) or use the
   quick buttons; the original's menus (Sierra, File, Action, Special, Speed) are along the top. Dialogs block the
   game until someone clicks or presses Enter; typed answers (age check, prompts) come from whoever is Larry.
+- The game starts the original way: title screen, then the age check and its five trivia questions. Answer the
+  questions by **pressing a, b, c or d** (the game reads the key). Fail twice and it restarts, as in the original.
 - **Click** the picture, or use the **arrow keys**, to walk. Clicking uses pathfinding over the picture's
   barrier data, so Larry walks around obstacles.
 - Co-op: the game has one Larry. The first player to join is Larry; everyone else walks their own character around
@@ -40,8 +42,13 @@ minutes is discarded too. `npm start` builds the client and serves everything fr
 
 ## Dev switches (environment variables for the server)
 
-- `LSL_SKIP_INTRO=1` start past the title and age quiz; `LSL_DEV=1` enables `/room N` in chat to jump to a room
+- `LSL_SKIP_INTRO=1` start past the title and age quiz (uses the game's own restart path); `LSL_DEV=1` enables `/room N` in chat to jump to a room
 - `LSL_RESET_MS=60000` change the reset interval; `LSL_MODE=legacy` run the older hand-authored placeholder engine
+
+## Tests
+
+`npm test` runs a smoke test of the interpreter (boot, walking, parser, pathfinding, the bar scenario, every room,
+every sound). It needs the extracted game and skips itself otherwise.
 
 ## Legacy placeholder engine
 

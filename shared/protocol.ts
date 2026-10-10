@@ -106,6 +106,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('agi_modal'), mid: z.number(), modal: AgiModalSchema, owner: z.string().nullable() }).strict(),
   z.object({ type: z.literal('agi_modal_close'), mid: z.number() }).strict(),
   z.object({ type: z.literal('agi_sound'), n: z.number().nullable() }).strict(),
+  z.object({ type: z.literal('agi_shake'), n: z.number() }).strict(),
   z.object({ type: z.literal('agi_players'), players: z.record(z.string()) }).strict(),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;

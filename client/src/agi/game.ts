@@ -165,6 +165,7 @@ export class AgiGame {
       case 'agi_modal': this.openModal(m.mid, m.modal, m.owner); break;
       case 'agi_modal_close': if (this.modalId === m.mid) this.closeModal(); break;
       case 'agi_sound': void this.synth.play(m.n); break;
+      case 'agi_shake': this.shake(m.n); break;
       case 'agi_players': Object.assign(this.names, m.players); for (const k of Object.keys(this.names)) if (!(k in m.players)) delete this.names[k]; this.renderRoster(); break;
       case 'chat': {
         this.addChat(m.entry);
@@ -191,6 +192,18 @@ export class AgiGame {
     this.renderRoster();
     this.renderMenus(f);
     this.renderTexts();
+  }
+
+  /** shake.screen: jolt the picture n times. */
+  private shake(n: number): void {
+    const s = this.stage;
+    const times = Math.max(1, Math.min(12, n || 4));
+    let i = 0;
+    const tick = () => {
+      s.style.transform = i >= times * 2 ? '' : `translate(${(i % 2 ? -1 : 1) * 6}px, ${(i % 3 ? 3 : -3)}px)`;
+      if (i++ < times * 2) setTimeout(tick, 45);
+    };
+    tick();
   }
 
   private renderRoster(): void {

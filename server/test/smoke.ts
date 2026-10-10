@@ -30,7 +30,8 @@ class Game {
   run(n: number): void { for (let i = 0; i < n; i++) this.step(); }
   say(cmd: string, n = 12): string[] { const from = this.printed.length; this.g.enterCommand(cmd); this.run(n); return this.printed.slice(from); }
   walk(dir: number, n: number): void { this.g.setDirection(dir); this.run(n); this.g.setDirection(0); this.run(1); }
-  intro(): void { for (let i = 0; i < 900 && this.g.vars[0] !== 11; i++) { if (i % 15 === 14) this.g.pressKey(13, 28); this.step(); } this.run(20); }
+  /** The game's own restart path (flag 6) skips the title and the age quiz, which needs real answer keys. */
+  intro(): void { this.g.flags[6] = 1; for (let i = 0; i < 400 && this.g.vars[0] !== 11; i++) this.step(); this.run(20); }
 }
 
 // 1. boot and intro reach the first playable room, with a status line and a drawn ego

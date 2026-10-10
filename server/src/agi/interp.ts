@@ -124,6 +124,9 @@ export class AgiInterp {
   private cycleNo = 0;
   private lastClockMs = 0;
   private pendingRoom: number | null = null;
+  /** set.scan.start: where each logic resumes (instead of at its top) until reset.scan.start or a new room. */
+  private scanStart = new Map<number, number>();
+  effects: { kind: 'shake'; n: number }[] = [];
 
   constructor(readonly res: AgiResources) {
     this.reset();
@@ -147,6 +150,7 @@ export class AgiInterp {
     this.block = null;
     this.sound = null;
     this.keyMap.clear();
+    this.scanStart.clear();
     this.vars[10] = 2; // animation interval
     this.vars[22] = 1; // sound type
     this.vars[23] = 15; // volume
@@ -317,7 +321,7 @@ export class AgiInterp {
   private *runLogic(n: number): Generator<Modal, void, unknown> {
     const lg = this.logic(n);
     const code = lg.code;
-    let pc = 0;
+    let pc = this.scanStart.get(n) ?? 0;
     while (pc < code.length) {
       const op = code[pc++]!;
       if (op === 0) return;
@@ -339,6 +343,8 @@ export class AgiInterp {
       if (argc === undefined) throw new Error(`bad opcode ${op} in logic ${n}`);
       const a = code.subarray(pc, pc + argc);
       pc += argc;
+      if (op === 145) { this.scanStart.set(n, pc); continue; }
+      if (op === 146) { this.scanStart.delete(n); continue; }
       if (op === 22) { yield* this.runLogic(a[0]!); continue; }
       if (op === 23) { yield* this.runLogic(this.vars[a[0]!]!); continue; }
       const pending = this.exec(op, a, lg);
@@ -570,7 +576,7 @@ export class AgiInterp {
       case 107: this.textMode = false; this.texts = this.texts.filter((t) => !t.screen); return;
       case 108: return; // set.cursor.char
       case 109: this.textFg = a[0]!; this.textBg = a[1]!; return;
-      case 110: return; // shake.screen
+      case 110: this.effects.push({ kind: 'shake', n: a[0]! }); return;
       case 111: return; // configure.screen
       case 112: this.statusLine = true; return;
       case 113: this.statusLine = false; return;
@@ -668,6 +674,7 @@ export class AgiInterp {
   private newRoom(n: number): never {
     this.soundQueue.push(null);
     this.sound = null;
+    this.scanStart.clear();
     for (let i = 1; i < this.objs.length; i++) { this.objs[i]!.animated = false; this.objs[i]!.drawn = false; }
     const ego = this.objs[0]!;
     ego.drawn = false;

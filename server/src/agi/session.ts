@@ -59,15 +59,15 @@ export class AgiSession {
     if (process.env.LSL_SKIP_INTRO) this.skipIntro();
   }
 
-  /** Dev aid: answer the title/age quiz automatically and stop at the first playable room. */
+  /** Dev aid: use the game's own restart path (flag 6) to skip the title and age quiz and start in room 11. */
   private skipIntro(): void {
     const it = this.interp;
-    for (let i = 0; i < 2000 && it.vars[0] !== 11; i++) {
+    it.flags[6] = 1;
+    for (let i = 0; i < 400 && it.vars[0] !== 11; i++) {
       it.nowMs += TICK_MS * 2;
-      if (i % 15 === 14) it.pressKey(13, 28);
       const gen = it.cycle();
       let r = gen.next();
-      while (!r.done) r = gen.next(r.value.kind === 'number' ? 30 : r.value.kind === 'string' ? 'x' : undefined);
+      while (!r.done) r = gen.next(undefined);
     }
     for (let i = 0; i < 30; i++) { it.nowMs += TICK_MS * 2; const gen = it.cycle(); let r = gen.next(); while (!r.done) r = gen.next(undefined); }
     this.lastRoom = it.vars[0]!;
@@ -320,6 +320,7 @@ export class AgiSession {
   private flush(): void {
     const it = this.interp;
     for (const n of it.soundQueue.splice(0)) this.broadcast({ type: 'agi_sound', n });
+    for (const e of it.effects.splice(0)) this.broadcast({ type: 'agi_shake', n: e.n });
     if (it.picVersion !== this.sentPicVersion) this.broadcast(this.picMessage());
     const frame = this.frame();
     const text = JSON.stringify(frame);
