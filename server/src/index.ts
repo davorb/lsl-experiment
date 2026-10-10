@@ -70,6 +70,7 @@ wss.on('connection', (ws) => {
       case 'input': session.input(playerId, msg.seq, msg.x, msg.y); break;
       case 'verb': void session.verb(playerId, msg.hotspotId, msg.verb); break;
       case 'chat': session.say(playerId, msg.text); break;
+      case 'choice': void session.choose(playerId, msg.hotspotId, msg.choice); break;
       case 'pose': break; // reserved
     }
   });

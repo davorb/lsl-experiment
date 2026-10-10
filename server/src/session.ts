@@ -5,7 +5,7 @@ import {
   type ChatEntry, type Facing, type Flags, type Player, type Pt, type ServerMessage, type SessionState, type Verb,
 } from '../../shared/protocol';
 import { inRect } from './geometry';
-import { loadIndex, loadRoom, runScript } from './content';
+import { itemLookText, loadIndex, loadRoom, makeText, runScript, type ScriptContext } from './content';
 
 const WALK_SPEED = 70; // native px/s at scale 1.0
 const EXPIRY_MS = 10 * 60 * 1000;
@@ -39,7 +39,10 @@ export class Session {
 
   constructor(code: string, private onDead: (code: string) => void) {
     this.code = code;
-    this.startRoom = loadIndex().start;
+    const idx = loadIndex();
+    this.startRoom = idx.start;
+    this.flags = { ...(idx.startFlags ?? {}) };
+    this.inventory = [...(idx.startInventory ?? [])];
   }
 
   get size(): number {
@@ -179,6 +182,11 @@ export class Session {
     const c = this.conns.get(id);
     const lr = c && loadRoom(c.p.roomId);
     if (!c || !lr) return;
+    if (hotspotId.startsWith('item:')) {
+      const item = hotspotId.slice(5);
+      if (this.inventory.includes(item)) this.send(c, { type: 'result', actorId: id, hotspotId, verb: 'look', say: itemLookText(item, this.flags) });
+      return;
+    }
     const hs = lr.room.hotspots.find((h) => h.id === hotspotId);
     if (!hs) return;
     if (verb !== 'look' && verb !== 'walk') {
@@ -195,23 +203,35 @@ export class Session {
   }
 
   private async runVerb(c: Conn, hotspotId: string, verb: Verb): Promise<void> {
+    await this.exec(c, hotspotId, verb);
+  }
+
+  /** Answer to a dialogue `choices` list from an earlier result. */
+  async choose(id: string, hotspotId: string, choice: string): Promise<void> {
+    const c = this.conns.get(id);
+    if (c) await this.exec(c, hotspotId, 'choose', choice);
+  }
+
+  private async exec(c: Conn, hotspotId: string, verb: Verb | 'choose', choice?: string): Promise<void> {
     const id = c.id;
     const lr = loadRoom(c.p.roomId);
-    if (!lr) return;
-    const hs = lr.room.hotspots.find((h) => h.id === hotspotId);
-    if (!hs) return;
+    const hs = lr?.room.hotspots.find((h) => h.id === hotspotId);
+    if (!lr || !hs) return;
     let say: string | undefined;
+    let choices: { id: string; label: string }[] | undefined;
     let go: { room: string; spawn: Pt } | undefined;
     try {
-      const res = hs.script
-        ? await runScript(hs.script, verb, {
-            state: structuredClone({ roomId: c.p.roomId, players: this.state(c.p.roomId).players, flags: this.flags, inventory: this.inventory }),
-            actorId: id,
-            hotspotId,
-          })
-        : undefined;
+      const ctx: ScriptContext = {
+        state: structuredClone({ roomId: c.p.roomId, players: this.state(c.p.roomId).players, flags: this.flags, inventory: this.inventory }),
+        actorId: id,
+        hotspotId,
+        choice,
+        text: makeText(this.flags),
+      };
+      const res = hs.script ? await runScript(hs.script, verb, ctx) : undefined;
       if (res) {
         say = res.say;
+        choices = res.choices;
         go = res.go;
         const patch: ServerMessage = { type: 'patch' };
         if (res.flags) { Object.assign(this.flags, res.flags); patch.flags = res.flags; }
@@ -221,15 +241,29 @@ export class Session {
           for (const a of res.inventory.add ?? []) if (!this.inventory.includes(a)) this.inventory.push(a);
           patch.inventory = this.inventory;
         }
-        if (patch.flags || patch.inventory) this.broadcast(patch);
+        if (res.pose) {
+          const p = res.pose;
+          c.path = [];
+          c.pendingExit = null;
+          c.pendingVerb = null;
+          c.p = { ...c.p, anim: p.anim, x: p.x ?? c.p.x, y: p.y ?? c.p.y, facing: p.facing ?? c.p.facing };
+          patch.players = { [id]: c.p };
+        }
+        if (patch.flags || patch.inventory || patch.players) this.broadcast(patch);
       }
     } catch (err) {
       console.error(`script ${hs.script} (${verb}) failed:`, err);
       say = 'Something goes wrong.';
     }
+    if (say === undefined && go && !choices) { this.changeRoom(c, { to: go.room, spawn: go.spawn }); return; }
+    if (say === '' && !choices) { if (go) this.changeRoom(c, { to: go.room, spawn: go.spawn }); return; }
+    if (verb === 'choose' && say === undefined && !choices) return;
     say ??= verb === 'look' ? (hs.name ? `It's a ${hs.name}.` : 'Nothing special.') : "That doesn't work.";
-    const msg: ServerMessage = { type: 'result', actorId: id, hotspotId, verb, say };
-    for (const o of this.conns.values()) if (o.p.roomId === c.p.roomId) this.send(o, msg);
+    const base = { type: 'result' as const, actorId: id, hotspotId, verb: verb === 'choose' ? ('talk' as const) : verb, say };
+    for (const o of this.conns.values()) {
+      if (o.p.roomId !== c.p.roomId) continue;
+      this.send(o, o.id === id && choices?.length ? { ...base, choices } : base);
+    }
     if (go) this.changeRoom(c, { to: go.room, spawn: go.spawn });
   }
 

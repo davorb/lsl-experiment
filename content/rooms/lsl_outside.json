@@ -2,18 +2,26 @@
   "id": "lsl_outside",
   "size": [320, 168],
   "background": "backgrounds/pic11.png",
+  "priority": "masks/pic11.pri.png",
   "ambient": "#7c88b8",
   "walk": [[0, 144], [97, 144], [117, 135], [155, 135], [175, 144], [263, 144], [263, 119], [319, 136], [319, 158], [0, 158]],
   "scale": { "yMin": 120, "yMax": 158, "scaleMin": 0.92, "scaleMax": 1 },
-  "masks": [{ "image": "masks/pic11.png" }],
+  "masks": [],
+  "props": [
+    { "view": "52", "loop": 0, "cel": 0, "agi": [60, 131] },
+    { "view": "50", "loop": 1, "agi": [36, 83], "cycleMs": 500 },
+    { "view": "50", "loop": 2, "agi": [83, 84], "cycleMs": 250 },
+    { "view": "50", "loop": 0, "agi": [134, 67], "cycleMs": 120 }
+  ],
   "hotspots": [
-    { "id": "flyer", "name": "flyer", "rect": [60, 98, 74, 110], "verb": "look", "script": "lsl_outside.flyer" },
-    { "id": "door", "name": "red door", "rect": [120, 92, 155, 134], "verb": "use", "script": "lsl_outside.door", "at": [137, 139] },
-    { "id": "window", "name": "window", "rect": [32, 92, 82, 118], "verb": "look", "script": "lsl_outside.window" },
-    { "id": "window2", "name": "window", "rect": [188, 92, 245, 118], "verb": "look", "script": "lsl_outside.window" },
-    { "id": "hotel", "name": "neon sign", "rect": [262, 0, 300, 72], "verb": "look", "script": "lsl_outside.hotel" },
-    { "id": "trash", "name": "trash can", "rect": [298, 112, 319, 132], "verb": "use", "script": "lsl_outside.trash", "at": [300, 138] },
-    { "id": "building", "name": "building", "rect": [0, 0, 262, 140], "verb": "look", "script": "lsl_outside.building" }
+    { "id": "pole_sign", "name": "sign on the pole", "rect": [60, 98, 74, 110], "verb": "look", "script": "lsl_outside.pole_sign" },
+    { "id": "door", "name": "door", "rect": [120, 91, 150, 132], "verb": "use", "script": "lsl_outside.door", "at": [137, 139] },
+    { "id": "doormat", "name": "doormat", "rect": [118, 133, 152, 143], "verb": "look", "script": "lsl_outside.doormat", "at": [137, 140] },
+    { "id": "neon", "name": "neon sign", "rect": [72, 47, 212, 84], "verb": "look", "script": "lsl_outside.neon" },
+    { "id": "hotel", "name": "neon sign", "rect": [268, 0, 284, 67], "verb": "look", "script": "lsl_outside.neon" },
+    { "id": "window", "name": "window", "rect": [32, 92, 82, 118], "verb": "look", "script": "lsl_outside.window", "at": [60, 146] },
+    { "id": "window2", "name": "window", "rect": [188, 92, 245, 118], "verb": "look", "script": "lsl_outside.window", "at": [215, 146] },
+    { "id": "building", "name": "Lefty's", "rect": [0, 0, 262, 140], "verb": "look", "script": "lsl_outside.building" }
   ],
   "exits": [
     { "rect": [0, 142, 5, 159], "to": "lsl_street", "spawn": [305, 140] }

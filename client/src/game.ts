@@ -1,6 +1,7 @@
 import { Application, Texture } from 'pixi.js';
 import type { Flags, Player, Room, ServerMessage, Verb } from '../../shared/protocol';
-import { loadIndex, loadPlayerSprites, loadRoom, tryTexture } from './content';
+import { loadIndex, loadPlayerSprites, loadRoom, loadView, tryTexture } from './content';
+import type { PropSpec } from './scene';
 import { Net } from './net';
 import { nativePoint, Scene } from './scene';
 import { UI } from './ui';
@@ -42,6 +43,39 @@ async function buildForeground(room: Room, bg: Texture | null): Promise<HTMLCanv
   return out;
 }
 
+/** One canvas per AGI priority level (5-15): the background pixels that have that priority. */
+async function buildPriorityLayers(room: Room, bg: Texture | null): Promise<{ q: number; canvas: HTMLCanvasElement }[]> {
+  if (!bg || !room.priority) return [];
+  const pri = await tryTexture(room.priority);
+  if (!pri) return [];
+  const [w, h] = room.size;
+  const read = (src: CanvasImageSource) => {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.drawImage(src, 0, 0, w, h);
+    return g.getImageData(0, 0, w, h).data;
+  };
+  const bgd = read(bg.source.resource as CanvasImageSource);
+  const prd = read(pri.source.resource as CanvasImageSource);
+  const layers = new Map<number, ImageData>();
+  for (let i = 0; i < w * h; i++) {
+    const q = Math.round(prd[i * 4]! / 16);
+    if (q < 5 || q > 15) continue;
+    let layer = layers.get(q);
+    if (!layer) layers.set(q, (layer = new ImageData(w, h)));
+    layer.data.set(bgd.subarray(i * 4, i * 4 + 4), i * 4);
+  }
+  return [...layers].map(([q, data]) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d')!.putImageData(data, 0, 0);
+    return { q, canvas };
+  });
+}
+
 export class Game {
   private net = new Net();
   private ui: UI;
@@ -53,11 +87,16 @@ export class Game {
   private seq = 0;
   private loadingRoom: string | null = null;
   private canvas!: HTMLCanvasElement;
+  private choiceSpot: string | null = null;
 
   constructor() {
     this.ui = new UI({
       onJoin: (code, name) => void this.join(code, name),
       onChat: (text) => this.net.send({ type: 'chat', text }),
+      onItem: (item) => this.net.send({ type: 'verb', hotspotId: `item:${item}`, verb: 'look' }),
+      onChoice: (choice) => {
+        if (this.choiceSpot) this.net.send({ type: 'choice', hotspotId: this.choiceSpot, choice });
+      },
     });
     this.net.onMessage = (m) => void this.handle(m);
     this.net.onClose = () => this.ui.showError('Disconnected from server.');
@@ -135,7 +174,8 @@ export class Game {
         break;
       }
       case 'result':
-        if (m.say) this.ui.say(this.players[m.actorId]?.name ?? '???', m.say);
+        this.choiceSpot = m.choices?.length ? m.hotspotId : null;
+        if (m.say) this.ui.say(this.players[m.actorId]?.name ?? '???', m.say, m.choices);
         break;
     }
   }
@@ -146,8 +186,15 @@ export class Game {
       const room = await loadRoom(id);
       const bg = await tryTexture(room.background);
       const fg = await buildForeground(room, bg);
+      const props: PropSpec[] = [];
+      for (const p of room.props) {
+        const loops = await loadView(p.view);
+        const frames = loops?.[p.loop];
+        if (frames?.length) props.push({ frames, cel: p.cel, agi: p.agi, at: p.at, cycleMs: p.cycleMs });
+      }
       this.scene.clearActors();
-      await this.scene.setRoom(room, bg, fg);
+      const layers = await buildPriorityLayers(room, bg);
+      await this.scene.setRoom(room, bg, fg, props, layers);
       this.relayout();
       this.scene.syncActors(this.players);
     } catch (e) {

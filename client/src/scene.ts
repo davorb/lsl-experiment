@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
-import { scaleAt, type Anim, type Facing, type Pt, type Room } from '../../shared/protocol';
-import { pixelTexture, type PlayerSprites } from './content';
+import { priorityStartY, scaleAt, type Anim, type Facing, type Pt, type Room } from '../../shared/protocol';
+import { pixelTexture, type Frame, type PlayerSprites } from './content';
 import { buildLights, makeTiltShift, vignetteTexture, type LightLayers, type TiltShift } from './fx';
 import { fallbackActorCanvas, placeholderBackground } from './placeholder';
 
@@ -25,6 +25,15 @@ interface Actor {
   y: number;
 }
 
+export interface PropSpec {
+  frames: Frame[];
+  cel: number;
+  agi?: [number, number];
+  at?: [number, number];
+  cycleMs?: number;
+}
+interface Prop extends PropSpec { sprite: Sprite }
+
 const COLORS = ['#d94f4f', '#4f8fd9', '#4fd98f', '#d9c34f', '#a24fd9', '#d98f4f', '#4fd9d3', '#d94fa2'];
 
 export class Scene {
@@ -39,6 +48,8 @@ export class Scene {
   private fg = new Sprite();
   private lights: LightLayers | null = null;
   private actors = new Map<string, Actor>();
+  private props: Prop[] = [];
+  private priLayers: Sprite[] = [];
   private colorIdx = 0;
   room: Room | null = null;
   zoom = 2;
@@ -69,8 +80,22 @@ export class Scene {
     this.vignette.height = h * zoom;
   }
 
-  async setRoom(room: Room, background: Texture | null, masks: HTMLCanvasElement | null): Promise<void> {
+  async setRoom(room: Room, background: Texture | null, masks: HTMLCanvasElement | null, props: PropSpec[] = [], layers: { q: number; canvas: HTMLCanvasElement }[] = []): Promise<void> {
     this.room = room;
+    for (const l of this.priLayers) l.destroy();
+    this.priLayers = layers.map(({ q, canvas }) => {
+      const sp = new Sprite(pixelTexture(Texture.from(canvas)));
+      sp.zIndex = priorityStartY(q) - 0.5; // draws over every actor whose foot Y is above this priority band
+      sp.eventMode = 'none';
+      this.actorLayer.addChild(sp);
+      return sp;
+    });
+    for (const p of this.props) p.sprite.destroy();
+    this.props = props.map((spec) => {
+      const sprite = new Sprite();
+      this.actorLayer.addChild(sprite);
+      return { ...spec, sprite };
+    });
     this.bg.texture = background ?? pixelTexture(Texture.from(placeholderBackground(room)));
     this.fg.visible = !!masks;
     if (masks) this.fg.texture = pixelTexture(Texture.from(masks));
@@ -169,8 +194,24 @@ export class Scene {
     return best;
   }
 
+  private updateProps(now: number): void {
+    for (const p of this.props) {
+      if (!p.frames.length) continue;
+      const i = p.cycleMs && p.frames.length > 1 ? Math.floor(now / p.cycleMs) % p.frames.length : p.cel;
+      const f = p.frames[i] ?? p.frames[0]!;
+      p.sprite.texture = f.texture;
+      p.sprite.anchor.set(f.ax, f.ay);
+      // AGI places cels by their bottom-left corner in 160-wide units; native foot centre = x*2 + width/2.
+      const x = p.agi ? p.agi[0] * 2 + f.texture.width / 2 : (p.at?.[0] ?? 0);
+      const y = p.agi ? p.agi[1] : (p.at?.[1] ?? 0);
+      p.sprite.position.set(Math.round(x), Math.round(y));
+      p.sprite.zIndex = y;
+    }
+  }
+
   private update(): void {
     const now = performance.now();
+    this.updateProps(now);
     const rt = now - INTERP_DELAY_MS;
     const room = this.room;
     if (!room) return;
@@ -187,7 +228,7 @@ export class Scene {
         x = p.x + (n.x - p.x) * k;
         y = p.y + (n.y - p.y) * k;
         facing = n.facing;
-        anim = k >= 1 ? n.anim : p.anim === 'walk' || n.anim === 'walk' ? 'walk' : 'idle';
+        anim = k >= 1 ? n.anim : p.anim === 'walk' || n.anim === 'walk' ? 'walk' : n.anim;
       }
       a.x = x;
       a.y = y;
@@ -211,6 +252,13 @@ export class Scene {
     const s = this.sprites;
     if (!s) {
       if (a.fallback) { a.sprite.texture = a.fallback; a.sprite.anchor.set(0.5, 1); }
+      return;
+    }
+    if (anim === 'sit' && s.sit) {
+      a.sprite.texture = s.sit.texture;
+      a.sprite.anchor.set(s.sit.ax, s.sit.ay);
+      a.w = s.sit.texture.width;
+      a.h = s.sit.texture.height;
       return;
     }
     const loop = s.loops[s.dirs[facing]] ?? s.loops[0];

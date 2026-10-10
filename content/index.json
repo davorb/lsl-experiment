@@ -58,6 +58,17 @@
       "down": 2,
       "up": 3
     },
-    "frameMs": 130
-  }
+    "frameMs": 130,
+    "sit": {
+      "view": "53",
+      "loop": 2,
+      "cel": 0
+    }
+  },
+  "startFlags": {
+    "cash": 20
+  },
+  "startInventory": [
+    "wallet"
+  ]
 }

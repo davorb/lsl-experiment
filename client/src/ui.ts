@@ -12,6 +12,8 @@ const el = <T extends HTMLElement>(tag: string, props: Partial<T> = {}, ...kids:
 export interface UIHandlers {
   onJoin(code: string, name: string): void;
   onChat(text: string): void;
+  onItem(item: string): void;
+  onChoice(id: string): void;
 }
 
 export class UI {
@@ -96,7 +98,11 @@ export class UI {
 
   setInventory(items: string[]): void {
     this.inventory.replaceChildren(
-      ...(items.length ? items.map((i) => el('span', { className: 'item', textContent: i.replace(/_/g, ' ') })) : [el('span', { className: 'item dim', textContent: '(inventory empty)' })]),
+      ...(items.length ? items.map((i) => {
+        const chip = el<HTMLButtonElement>('button', { className: 'item', textContent: i.replace(/_/g, ' '), type: 'button', title: 'Look at it' });
+        chip.onclick = () => this.h.onItem(i);
+        return chip;
+      }) : [el('span', { className: 'item dim', textContent: '(inventory empty)' })]),
     );
   }
 
@@ -105,11 +111,22 @@ export class UI {
     this.meta.replaceChildren('Room ', el('b', { textContent: code }), ' · share this URL: ', el('b', { textContent: `${location.origin}/#${code}` }), el('br'), `flags: ${on.join(', ') || '—'}`);
   }
 
-  say(speaker: string, text: string): void {
-    this.dialogue.replaceChildren(el('b', { textContent: speaker }), text);
+  say(speaker: string, text: string, choices?: { id: string; label: string }[]): void {
+    const body = el<HTMLDivElement>('div', { className: 'text' }, el('b', { textContent: speaker }), text);
+    this.dialogue.replaceChildren(body);
+    if (choices?.length) {
+      const row = el<HTMLDivElement>('div', { className: 'choices' });
+      for (const c of choices) {
+        const b = el<HTMLButtonElement>('button', { type: 'button', textContent: c.label });
+        b.onclick = () => { this.h.onChoice(c.id); this.dialogue.style.display = 'none'; };
+        row.append(b);
+      }
+      this.dialogue.append(row);
+    }
     this.dialogue.style.display = 'block';
     clearTimeout(this.dialogueTimer);
-    this.dialogueTimer = window.setTimeout(() => (this.dialogue.style.display = 'none'), 6000);
+    // Text auto-hides (longer for longer text); a pending choice stays until answered.
+    if (!choices?.length) this.dialogueTimer = window.setTimeout(() => (this.dialogue.style.display = 'none'), 4000 + text.length * 45);
   }
 
   addChat(e: ChatEntry): void {

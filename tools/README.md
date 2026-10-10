@@ -27,6 +27,18 @@ Detection order:
 3. **Pre-extracted PNGs**: PNGs anywhere under `game-data/`. Files under `backgrounds/` (or any PNG 256px+ wide) become
    backgrounds; `sprites/<view>/<cel>.png` are copied as is. Sidecar `view.json` files are not synthesized.
 
+## Reading the original's logic
+
+`npx tsx tools/src/dump-logic.ts 15` prints a readable disassembly of AGI logic 15 (the bar): `said()` patterns
+resolved through `WORDS.TOK`, `print()` calls with their message text, and `set.view` / `position` object setup
+(AGI coordinates are x*2 in native pixels, y as is, origin bottom-left). `--check` verifies every logic parses to
+exactly its message section. This is how rooms are mapped: the room number is the logic number, `set.view` tells
+you which view an object uses, and the nearby `if (said(...))` / `posn(...)` tests tell you which message belongs to
+which object and verb. It is a read-only authoring aid; nothing is executed.
+
+Extraction also writes `content/text/logic<N>.json` (message tables), `views.json` (view descriptions, which
+hold the inventory item "look" texts at view 100 + item number) and `objects.json` (item names).
+
 ## Authoring a room
 
 Extraction only gives you pictures. Edit `content/rooms/<id>.json` for walk polygon, scale, hotspots, exits, lights

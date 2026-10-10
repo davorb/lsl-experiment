@@ -1,18 +1,22 @@
-export function look({ hotspotId }) {
-  switch (hotspotId) {
-    case 'flyer': return { say: 'A flyer, taped to the pole at an optimistic angle: "OPEN MIC NIGHT. Bring your own audience."' };
-    case 'door': return { say: "The red door of Lefty's. Music leaks out, along with the smell of old whiskey." };
-    case 'window': return { say: 'Glass blocks. You can see light inside and nothing else.' };
-    case 'hotel': return { say: 'A hotel sign, mostly lit. It buzzes like it has opinions.' };
-    case 'trash': return { say: 'A trash can with the lid on crooked.' };
-    case 'building': return { say: "Lefty's Bar, a gray box of a building with a doorway and big ideas." };
+// Outside Lefty's (AGI logic 11). Dialogue is pulled from the extracted game text by message number.
+const t = (c, ...n) => c.text(11, ...n) ?? '…';
+
+export function look(c) {
+  switch (c.hotspotId) {
+    case 'neon': return { say: t(c, 1) };
+    case 'pole_sign': return { say: t(c, 2) };
+    case 'window': case 'window2': return { say: t(c, 6) };
+    case 'door': return { say: t(c, 8) };
+    case 'doormat': return { say: t(c, 9) };
+    case 'building': return { say: t(c, 4) };
   }
 }
 
-export function use({ hotspotId, state }) {
-  switch (hotspotId) {
-    case 'door': return { say: 'You push through the red door.', go: { room: 'lsl_bar', spawn: [160, 150] } };
-    case 'trash': return { say: state.flags.dollarTaken ? 'Nothing in there worth a second look.' : 'You find a half-eaten sandwich. You put it back.' };
-    default: return look({ hotspotId });
+export function use(c) {
+  switch (c.hotspotId) {
+    case 'door': return { go: { room: 'lsl_bar', spawn: [160, 150] } };
+    case 'doormat': return { say: t(c, 10, 11, 12) };
+    case 'window': case 'window2': return { say: t(c, 7) };
+    default: return look(c);
   }
 }

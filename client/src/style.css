@@ -32,3 +32,8 @@ button, input { font: inherit; color: inherit; }
 #lobby .row { display: flex; gap: 8px; } #lobby .row button { flex: 1; }
 #lobby .err { color: #ff8f8f; min-height: 1.2em; font-size: 12px; }
 .item.dim { opacity: .5; }
+#dialogue .text { white-space: pre-wrap; }
+#dialogue .choices { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; line-height: 1.2; }
+#dialogue .choices button { text-align: left; background: #2a2333; border: 1px solid var(--edge); border-radius: 4px; padding: 5px 9px; cursor: pointer; font-size: 13px; }
+#dialogue .choices button:hover { border-color: var(--accent); background: #3a2f45; }
+.item { cursor: pointer; } .item:hover { border-color: var(--accent); }

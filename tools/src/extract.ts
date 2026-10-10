@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { PNG } from 'pngjs';
-import { decodePicture, decodeView, isAgiDir, listResources, pictureToRGBA, PIC_H } from './agi';
+import { decodeMessages, decodeObjects, decodePicture, decodeView, isAgiDir, listResources, pictureToRGBA, viewDescription, PIC_H } from './agi';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const args = process.argv.slice(2);
@@ -43,7 +43,7 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-function writeStubRoom(id: string, w: number, h: number, withMask = false): void {
+function writeStubRoom(id: string, w: number, h: number, withPriority = false): void {
   const f = path.join(CONTENT, 'rooms', `${id}.json`);
   if (fs.existsSync(f)) return; // never clobber hand-authored rooms
   const room = {
@@ -52,7 +52,8 @@ function writeStubRoom(id: string, w: number, h: number, withMask = false): void
     background: `backgrounds/${id}.png`,
     walk: [],
     scale: { yMin: 0, yMax: h, scaleMin: 1, scaleMax: 1 },
-    masks: withMask ? [{ image: `masks/${id}.png` }] : [],
+    masks: [],
+    ...(withPriority ? { priority: `masks/${id}.pri.png` } : {}),
     hotspots: [],
     exits: [],
     lights: [],
@@ -90,22 +91,20 @@ function extractAgi(): void {
     const rgba = pictureToRGBA(pic);
     writePng(path.join(CONTENT, 'backgrounds', `${id}.png`), rgba.width, rgba.height, rgba.data);
     const painted = pic.visual.reduce((a, c) => a + (c !== 15 ? 1 : 0), 0) / pic.visual.length;
-    // Walk-behind mask from the AGI priority screen: priority 13-14 pixels (poles, wires, railings) draw over
-    // the actor. 15 is the unused border colour and is ignored. Mask is white = walk-behind.
-    const mask = Buffer.alloc(rgba.width * PIC_H * 4, 255);
-    let maskPx = 0;
+    // AGI priority screen -> masks/<id>.pri.png (red = priority * 16). The client draws pixels whose priority
+    // exceeds an actor's (derived from its foot Y) over that actor, which gives bars, poles and railings.
+    const pri = Buffer.alloc(rgba.width * PIC_H * 4, 255);
+    let hasPri = false;
     for (let y = 0; y < PIC_H; y++) {
       for (let x = 0; x < rgba.width; x++) {
-        const pr = pic.priority[y * 160 + (x >> 1)]!;
-        const on = pr === 13 || pr === 14;
-        if (on) maskPx++;
-        const v = on ? 255 : 0;
+        const q = pic.priority[y * 160 + (x >> 1)]!;
+        if (q > 4) hasPri = true;
         const o = (y * rgba.width + x) * 4;
-        mask[o] = mask[o + 1] = mask[o + 2] = v;
+        pri[o] = q * 16; pri[o + 1] = 0; pri[o + 2] = 0;
       }
     }
-    if (maskPx > 0) writePng(path.join(CONTENT, 'masks', `${id}.png`), rgba.width, PIC_H, mask);
-    writeStubRoom(id, rgba.width, PIC_H, maskPx > 0);
+    if (hasPri) writePng(path.join(CONTENT, 'masks', `${id}.pri.png`), rgba.width, PIC_H, pri);
+    writeStubRoom(id, rgba.width, PIC_H, hasPri);
     // Pictures that are nearly blank (title cards, overlays) are written but not listed as rooms.
     if (painted > 0.25) rooms.push(id);
     else skipped++;
@@ -134,8 +133,29 @@ function extractAgi(): void {
     }
   }
   console.log(`views: ${viewCount} written; player view = ${player?.view ?? 'none (client uses 16x32 rectangle)'}`);
+  extractText(views);
   updateIndex(rooms, player);
   console.log(`rooms: ${rooms.slice(0, 12).join(', ')}${rooms.length > 12 ? ', ...' : ''}`);
+}
+
+// Game text goes to content/text/ (gitignored like the art): per-logic message tables, inventory
+// object names, and view descriptions (which hold the "look at item" texts).
+function extractText(views: Map<number, Buffer>): void {
+  const dir = path.join(CONTENT, 'text');
+  fs.mkdirSync(dir, { recursive: true });
+  let n = 0;
+  for (const [no, data] of listResources(GAME, 'LOGDIR')) {
+    const m = decodeMessages(data);
+    if (Object.keys(m).length) { fs.writeFileSync(path.join(dir, `logic${no}.json`), JSON.stringify(m, null, 1)); n++; }
+  }
+  const desc: Record<string, string> = {};
+  for (const [no, data] of views) {
+    const d = viewDescription(data);
+    if (d) desc[String(no)] = d;
+  }
+  fs.writeFileSync(path.join(dir, 'views.json'), JSON.stringify(desc, null, 1));
+  fs.writeFileSync(path.join(dir, 'objects.json'), JSON.stringify(decodeObjects(GAME), null, 1));
+  console.log(`text: ${n} logic message tables, ${Object.keys(desc).length} view descriptions, objects.json`);
 }
 
 // ---- already-extracted PNGs ---------------------------------------------------

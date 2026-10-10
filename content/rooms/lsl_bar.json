@@ -2,16 +2,34 @@
   "id": "lsl_bar",
   "size": [320, 168],
   "background": "backgrounds/pic15.png",
+  "priority": "masks/pic15.pri.png",
   "ambient": "#b79a8c",
   "walk": [[14, 141], [75, 113], [103, 106], [107, 127], [262, 128], [262, 121], [303, 130], [308, 142], [308, 157], [183, 157], [183, 164], [137, 164], [137, 157], [14, 157]],
   "scale": { "yMin": 120, "yMax": 158, "scaleMin": 0.92, "scaleMax": 1 },
-  "masks": [{ "image": "masks/pic15.png" }],
+  "masks": [],
+  "props": [
+    { "view": "55", "loop": 0, "cel": 0, "agi": [81, 69] },
+    { "view": "51", "loop": 1, "agi": [66, 66], "cycleMs": 80 },
+    { "view": "51", "loop": 2, "agi": [16, 128], "cycleMs": 420 },
+    { "view": "56", "loop": 0, "cel": 0, "agi": [142, 150] },
+    { "view": "49", "loop": 2, "cel": 0, "agi": [106, 101] },
+    { "view": "53", "loop": 1, "agi": [65, 128], "cycleMs": 900 },
+    { "view": "54", "loop": 1, "cel": 0, "agi": [77, 128] },
+    { "view": "53", "loop": 0, "cel": 0, "agi": [112, 128] },
+    { "view": "53", "loop": 0, "cel": 1, "agi": [101, 128] }
+  ],
   "hotspots": [
+    { "id": "lefty", "name": "Lefty", "rect": [204, 78, 236, 104], "verb": "talk", "script": "lsl_bar.lefty", "at": [190, 133] },
+    { "id": "blonde", "name": "blonde", "rect": [130, 92, 152, 129], "verb": "look", "script": "lsl_bar.blonde", "at": [140, 134] },
+    { "id": "bore", "name": "man on the stool", "rect": [153, 90, 177, 129], "verb": "look", "script": "lsl_bar.bore", "at": [165, 134] },
+    { "id": "customers", "name": "customers", "rect": [202, 104, 244, 128], "verb": "look", "script": "lsl_bar.customers", "at": [222, 134] },
+    { "id": "stool", "name": "stool", "rect": [178, 110, 200, 130], "verb": "use", "script": "lsl_bar.stool", "at": [189, 134] },
+    { "id": "jukebox", "name": "jukebox", "rect": [30, 96, 70, 130], "verb": "look", "script": "lsl_bar.jukebox", "at": [52, 136] },
     { "id": "moose", "name": "moose head", "rect": [14, 34, 60, 80], "verb": "look", "script": "lsl_bar.moose" },
-    { "id": "back_door", "name": "back room door", "rect": [66, 64, 102, 108], "verb": "use", "script": "lsl_bar.back_door", "at": [88, 111] },
-    { "id": "restroom", "name": "restroom door", "rect": [282, 88, 312, 140], "verb": "use", "script": "lsl_bar.restroom", "at": [296, 138] },
-    { "id": "sign", "name": "mirror", "rect": [158, 50, 232, 72], "verb": "look", "script": "lsl_bar.mirror" },
-    { "id": "bar", "name": "bar", "rect": [105, 88, 264, 128], "verb": "use", "script": "lsl_bar.bar", "at": [185, 132] }
+    { "id": "fan", "name": "ceiling fan", "rect": [128, 50, 186, 70], "verb": "look", "script": "lsl_bar.fan" },
+    { "id": "art", "name": "pictures", "rect": [100, 70, 140, 100], "verb": "look", "script": "lsl_bar.art" },
+    { "id": "door", "name": "naugahyde door", "rect": [284, 88, 306, 142], "verb": "use", "script": "lsl_bar.door", "at": [292, 140] },
+    { "id": "bar", "name": "bar", "rect": [105, 88, 264, 128], "verb": "look", "script": "lsl_bar.bar" }
   ],
   "exits": [
     { "rect": [138, 157, 182, 166], "to": "lsl_outside", "spawn": [137, 140] }

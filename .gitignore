@@ -6,6 +6,7 @@ game-data/
 content/backgrounds/
 content/sprites/
 content/masks/
+content/text/
 # generated room stubs; only the placeholder rooms are tracked
 content/rooms/*
 !content/rooms/lobby.json

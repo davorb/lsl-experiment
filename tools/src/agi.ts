@@ -39,7 +39,7 @@ export function readResource(dir: string, entry: DirEntry): Buffer | null {
   return b.subarray(entry.offset + 5, entry.offset + 5 + len);
 }
 
-export function listResources(dir: string, kind: 'PICDIR' | 'VIEWDIR'): Map<number, Buffer> {
+export function listResources(dir: string, kind: 'PICDIR' | 'VIEWDIR' | 'LOGDIR'): Map<number, Buffer> {
   const out = new Map<number, Buffer>();
   readDir(dir, kind).forEach((e, i) => {
     if (!e) return;
@@ -266,4 +266,67 @@ export function decodeView(b: Buffer): Loop[] | null {
       return { width: W, height: c.h, rgba };
     }),
   );
+}
+
+// ---- logic message tables (text only; bytecode is not interpreted) ------------------
+
+const XOR_KEY = Buffer.from('Avis Durgan');
+
+/** Decode the message section of a logic resource. Index = message number (1-based in AGI); missing ones are absent. */
+export function decodeMessages(b: Buffer): Record<number, string> {
+  const out: Record<number, string> = {};
+  if (b.length < 4) return out;
+  const msgStart = 2 + b.readUInt16LE(0);
+  if (msgStart + 3 > b.length) return out;
+  const count = b[msgStart]!;
+  const textStart = msgStart + 3 + count * 2;
+  if (textStart > b.length) return out;
+  for (let i = 0; i < count; i++) {
+    const off = b.readUInt16LE(msgStart + 3 + i * 2);
+    if (off === 0) continue;
+    let p = msgStart + 1 + off;
+    const chars: number[] = [];
+    while (p < b.length) {
+      const c = b[p]! ^ XOR_KEY[(p - textStart) % XOR_KEY.length]!;
+      if (c === 0) break;
+      chars.push(c);
+      p++;
+    }
+    out[i + 1] = Buffer.from(chars).toString('latin1');
+  }
+  return out;
+}
+
+/** Description string stored in a view resource header (empty if none). */
+export function viewDescription(b: Buffer): string {
+  if (b.length < 5) return '';
+  const off = b.readUInt16LE(3);
+  if (!off || off >= b.length) return '';
+  let e = off;
+  while (e < b.length && b[e] !== 0) e++;
+  return b.subarray(off, e).toString('latin1');
+}
+
+export interface GameObject { id: number; name: string; room: number }
+
+/** Inventory/object table from the OBJECT file (XOR-encrypted with the same key). */
+export function decodeObjects(dir: string): GameObject[] {
+  const f = path.join(dir, 'OBJECT');
+  if (!fs.existsSync(f)) return [];
+  let b = fs.readFileSync(f);
+  // Some interpreters ship it decrypted; encrypted files do not parse sensibly without the key.
+  const dec = Buffer.from(b.map((c, i) => c ^ XOR_KEY[i % XOR_KEY.length]!));
+  const parses = (buf: Buffer) => buf.length > 6 && buf.readUInt16LE(0) > 0 && buf.readUInt16LE(0) < buf.length && buf.readUInt16LE(0) % 3 === 0;
+  if (!parses(b) && parses(dec)) b = dec;
+  const nameBase = 3;
+  const count = Math.floor(b.readUInt16LE(0) / 3);
+  const out: GameObject[] = [];
+  for (let i = 0; i < count; i++) {
+    const off = b.readUInt16LE(3 + i * 3);
+    const room = b[3 + i * 3 + 2]!;
+    let e = nameBase + off;
+    while (e < b.length && b[e] !== 0) e++;
+    out.push({ id: i, name: b.subarray(nameBase + off, e).toString('latin1'), room });
+  }
+  return out;
 }

@@ -7,7 +7,7 @@ export const TICK_HZ = 10;
 export const CODE_RE = /^[A-Z]{4}$/;
 
 export const FacingSchema = z.enum(['left', 'right', 'up', 'down']);
-export const AnimSchema = z.enum(['idle', 'walk']);
+export const AnimSchema = z.enum(['idle', 'walk', 'sit']);
 export const VerbSchema = z.enum(['look', 'talk', 'use', 'walk']);
 
 export type Facing = z.infer<typeof FacingSchema>;
@@ -54,6 +54,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('verb'), hotspotId: z.string(), verb: VerbSchema }).strict(),
   z.object({ type: z.literal('chat'), text: z.string() }).strict(),
   z.object({ type: z.literal('pose'), anim: AnimSchema }).strict(),
+  z.object({ type: z.literal('choice'), hotspotId: z.string(), choice: z.string() }).strict(),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -84,6 +85,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
       hotspotId: z.string(),
       verb: VerbSchema,
       say: z.string().optional(),
+      /** Only sent to the acting player; they answer with a `choice` message. */
+      choices: z.array(z.object({ id: z.string(), label: z.string() }).strict()).optional(),
     })
     .strict(),
   z.object({ type: z.literal('chat'), entry: ChatEntrySchema }).strict(),
@@ -117,6 +120,8 @@ export const RoomSchema = z.object({
     .object({ yMin: z.number(), yMax: z.number(), scaleMin: z.number(), scaleMax: z.number() })
     .default({ yMin: 0, yMax: 1, scaleMin: 1, scaleMax: 1 }),
   masks: z.array(z.object({ image: z.string() })).default([]),
+  /** AGI priority map (red channel = priority * 16). Pixels with priority above an actor's draw over it. */
+  priority: z.string().optional(),
   hotspots: z
     .array(
       z.object({
@@ -143,17 +148,37 @@ export const RoomSchema = z.object({
   lights: z
     .array(z.object({ x: z.number(), y: z.number(), radius: z.number(), color: z.string() }))
     .default([]),
+  /** Non-interactive scenery and NPC sprites taken from extracted views. */
+  props: z
+    .array(
+      z.object({
+        view: z.string(),
+        loop: z.number().default(0),
+        cel: z.number().default(0),
+        /** Original AGI placement: bottom-left in 160-wide units. Converted to native foot-centre on load. */
+        agi: z.tuple([z.number(), z.number()]).optional(),
+        /** Native foot-centre, when not using `agi`. */
+        at: z.tuple([z.number(), z.number()]).optional(),
+        /** Cycle through the loop's cels at this interval; omit for a still frame. */
+        cycleMs: z.number().optional(),
+      }),
+    )
+    .default([]),
 });
 export type Room = z.infer<typeof RoomSchema>;
 
 export const IndexSchema = z.object({
   start: z.string(),
   rooms: z.array(z.string()),
+  startFlags: FlagsSchema.optional(),
+  startInventory: z.array(z.string()).optional(),
   player: z
     .object({
       view: z.string(),
       dirs: z.object({ right: z.number(), left: z.number(), down: z.number(), up: z.number() }),
       frameMs: z.number().default(130),
+      /** Sprite used while the `sit` pose is active. */
+      sit: z.object({ view: z.string(), loop: z.number(), cel: z.number() }).optional(),
     })
     .optional(),
 });
@@ -172,4 +197,13 @@ export function scaleAt(room: Pick<Room, 'scale'>, y: number): number {
   const span = s.yMax - s.yMin;
   const t = span === 0 ? 1 : Math.min(1, Math.max(0, (y - s.yMin) / span));
   return s.scaleMin + (s.scaleMax - s.scaleMin) * t;
+}
+
+/** AGI actor priority from foot Y: bands of 12px starting at y=48 (priority 5), capped at 14. */
+export function actorPriority(y: number): number {
+  return y < 48 ? 4 : Math.min(14, Math.floor((y - 48) / 12) + 5);
+}
+/** First foot Y at which an actor reaches priority `q`. */
+export function priorityStartY(q: number): number {
+  return q <= 4 ? 0 : 48 + (q - 5) * 12;
 }

@@ -1,43 +1,97 @@
-export function look({ hotspotId, state }) {
-  switch (hotspotId) {
-    case 'moose': return { say: 'A moose head, mounted over the wainscot. It looks like it has seen things.' };
-    case 'back_door': return { say: state.flags.sliceComplete ? 'The back room door stands ajar.' : 'A door marked STAFF ONLY. Someone has added "(AND FRIENDS)" in marker.' };
-    case 'restroom': return { say: 'A grey door. A hand-lettered sign: OUT OF ORDER.' };
-    case 'mirror': return { say: 'A big mirror behind the bottles. You look about as good as the room does.' };
-    case 'bar': return { say: 'A long bar with five stools and one bartender polishing the same glass.' };
+// Inside Lefty's (AGI logic 15): Lefty, the customers, the juke box and the naugahyde door.
+const t = (c, ...n) => c.text(15, ...n) ?? '…';
+const sitting = (c) => c.state.players[c.actorId]?.anim === 'sit';
+const PRICE = 3;
+
+export function look(c) {
+  switch (c.hotspotId) {
+    case 'lefty': return { say: t(c, 82, 83) };
+    case 'blonde': return { say: t(c, 48) };
+    case 'bore': case 'customers': return { say: t(c, 53) };
+    case 'jukebox': return { say: t(c, 64) };
+    case 'moose': return { say: t(c, 45) };
+    case 'fan': return { say: t(c, 49, 50) };
+    case 'art': return { say: t(c, 51) };
+    case 'door': return { say: t(c, 65) };
+    case 'bar': case 'stool': return { say: t(c, 1) };
   }
 }
 
-export function talk({ hotspotId, state }) {
-  if (hotspotId !== 'bar') return look({ hotspotId, state });
-  if (state.flags.sliceComplete) return { say: 'Bartender: Go on, you have a back room to see.' };
-  if (state.inventory.includes('whiskey')) return { say: 'Bartender: That drink is for the back door, friend. Not for you.' };
-  if (state.inventory.includes('dollar_bill')) return { say: 'Bartender: A dollar? That buys a whiskey. Slide it over (Use the bar).' };
-  return { say: "Bartender: Whiskey's a dollar. Cash up front. Come back when you have one." };
+export function talk(c) {
+  switch (c.hotspotId) {
+    case 'lefty': {
+      if (!sitting(c)) return { say: t(c, 33) };
+      return {
+        say: t(c, 21),
+        choices: [
+          { id: 'whiskey', label: c.text(15, 22) ?? 'Whiskey' },
+          { id: 'beer', label: c.text(15, 23) ?? 'Beer' },
+          { id: 'wine', label: c.text(15, 36) ?? 'Wine' },
+          { id: 'nothing', label: 'Never mind.' },
+        ],
+      };
+    }
+    case 'blonde': return { say: t(c, 60, 56, 57) };
+    case 'bore': return { say: sitting(c) ? t(c, 43) : t(c, 44) };
+    case 'customers': return { say: t(c, 61) };
+    case 'door': return knock(c);
+    default: return look(c);
+  }
 }
 
-export function use({ hotspotId, state }) {
-  switch (hotspotId) {
-    case 'bar': {
-      if (state.inventory.includes('whiskey')) return { say: 'You already have a drink. Pace yourselves.' };
-      if (state.flags.boughtDrink) return { say: 'The bartender shakes his head: one per customer, shared among friends.' };
-      if (!state.inventory.includes('dollar_bill')) return { say: "The bartender raises an eyebrow. 'Cash first.'" };
-      return {
-        flags: { boughtDrink: true },
-        inventory: { remove: ['dollar_bill'], add: ['whiskey'] },
-        say: 'You slide the dollar across. A glass of whiskey slides back.',
-      };
+export function use(c) {
+  switch (c.hotspotId) {
+    case 'lefty': return talk(c);
+    case 'blonde': return { say: t(c, 67) };
+    case 'jukebox': {
+      const cash = Number(c.state.flags.cash ?? 0);
+      if (cash < 1) return { say: t(c, 76) };
+      return { flags: { cash: cash - 1 }, say: t(c, 4) };
     }
-    case 'restroom': return look({ hotspotId, state });
-    case 'back_door': {
-      if (state.flags.sliceComplete) return { say: 'Already unlocked. The rooms beyond have not been authored yet.' };
-      if (!state.inventory.includes('whiskey')) return { say: "Locked. A voice behind it says: 'Password is a drink.'" };
-      return {
-        flags: { sliceComplete: true },
-        inventory: { remove: ['whiskey'] },
-        say: 'You pass the whiskey through the gap. The lock clicks. END OF THE DEMO SLICE: the rooms beyond are not authored yet.',
-      };
-    }
-    default: return look({ hotspotId, state });
+    case 'stool':
+      return sitting(c)
+        ? { pose: { anim: 'idle', x: 189, y: 134, facing: 'down' }, say: '' }
+        : { pose: { anim: 'sit', x: 189, y: 128, facing: 'up' }, say: '' };
+    case 'door': return knock(c);
+    default: return look(c);
   }
+}
+
+function knock(c) {
+  if (c.state.flags.sliceComplete) return { say: t(c, 9) };
+  return {
+    say: t(c, 5, 7),
+    choices: [
+      { id: 'al', label: 'Al sent me.' },
+      { id: 'larry', label: "Open up, it's Larry." },
+      { id: 'lefty', label: 'Lefty sent me.' },
+    ],
+  };
+}
+
+export function choose(c) {
+  const cash = Number(c.state.flags.cash ?? 0);
+  if (c.hotspotId === 'door') {
+    if (c.choice !== 'al') return { say: t(c, 8) };
+    return {
+      flags: { sliceComplete: true },
+      say: `${t(c, 9)}\n\n(End of the authored slice: the rooms beyond this door are not set up yet.)`,
+    };
+  }
+  if (c.hotspotId !== 'lefty') return;
+  const orders = { whiskey: [22], beer: [23], wine: [36, 37] };
+  const order = orders[c.choice];
+  if (!order) return { say: '' };
+  if (!sitting(c)) return { say: t(c, 20) };
+  if (cash < PRICE) return { say: t(c, ...order, 24, 26, 27) };
+  const drinks = Number(c.state.flags.drinks ?? 0);
+  const woozy = drinks === 0 ? 31 : 32;
+  const paid = { cash: cash - PRICE, drinks: drinks + 1 };
+  if (c.choice === 'whiskey') {
+    // One open glass at a time: a second round gets tossed back on the spot.
+    if (c.state.inventory.includes('whiskey')) return { flags: paid, say: t(c, ...order, 24, 25, 35, woozy) };
+    return { flags: paid, inventory: { add: ['whiskey'] }, say: t(c, ...order, 24, 25, 38) };
+  }
+  if (c.choice === 'beer') return { flags: paid, say: t(c, ...order, 24, 25, 28, woozy) };
+  return { flags: paid, say: t(c, ...order, 24, 25, 29, 30, woozy) };
 }
