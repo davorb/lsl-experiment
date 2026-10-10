@@ -99,3 +99,53 @@ export function disassemble(b: Buffer, words: Map<number, string>, msgs: Record<
   while (closes.length) { closes.pop(); lines.push(`${ind()}}`); }
   return { lines, ok: p === end };
 }
+
+
+/**
+ * Condensed view for puzzle analysis: only the lines that move the player or change the inventory/score,
+ * each prefixed with the innermost enclosing conditions (said() resolved to words).
+ */
+export function summarize(b: Buffer, words: Map<number, string>, interesting: (op: number, a: number[]) => string | null): string[] {
+  const end = 2 + b.readUInt16LE(0);
+  const out: string[] = [];
+  const stack: { cond: string; close: number }[] = [];
+  let p = 2;
+  while (p < end) {
+    while (stack.length && stack[stack.length - 1]!.close <= p) stack.pop();
+    const op = b[p++]!;
+    if (op === 0xff) {
+      const conds: string[] = [];
+      let neg = false;
+      for (;;) {
+        const t = b[p++]!;
+        if (t === 0xff) break;
+        if (t === 0xfd) { neg = true; continue; }
+        if (t === 0xfc) { conds.push('|'); continue; }
+        if (t === 14) {
+          const n = b[p++]!;
+          const ws: string[] = [];
+          for (let i = 0; i < n; i++) { const id = b.readUInt16LE(p); p += 2; ws.push(id === 9999 ? '*' : id === 1 ? 'any' : (words.get(id) ?? `#${id}`)); }
+          conds.push(`${neg ? '!' : ''}said(${ws.join(' ')})`);
+        } else {
+          const d = TESTS[t]!;
+          const a = Array.from(b.subarray(p, p + d[1]));
+          p += d[1];
+          conds.push(`${neg ? '!' : ''}${d[0]}(${a.join(',')})`);
+        }
+        neg = false;
+      }
+      const size = b.readUInt16LE(p);
+      p += 2;
+      stack.push({ cond: conds.join(' '), close: p + size });
+    } else if (op === 0xfe) {
+      p += 2;
+    } else if (op !== 0) {
+      const n = ARGS[op]!;
+      const a = Array.from(b.subarray(p, p + n));
+      p += n;
+      const what = interesting(op, a);
+      if (what) out.push(`${stack.map((x) => `[${x.cond}]`).join('')} => ${what}`);
+    }
+  }
+  return out;
+}

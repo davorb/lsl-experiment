@@ -127,6 +127,8 @@ export class AgiInterp {
   /** set.scan.start: where each logic resumes (instead of at its top) until reset.scan.start or a new room. */
   private scanStart = new Map<number, number>();
   effects: { kind: 'shake'; n: number }[] = [];
+  /** Source of randomness for the game's random() command; tests inject a seeded one. */
+  rng: () => number = Math.random;
 
   constructor(readonly res: AgiResources) {
     this.reset();
@@ -616,7 +618,7 @@ export class AgiInterp {
       case 127: return; // init.disk
       case 128: this.restartRequested = true; throw new GameRestart();
       case 129: return this.showObj(a[0]!);
-      case 130: v[a[2]!] = a[0]! + Math.floor(Math.random() * (a[1]! - a[0]! + 1)); return;
+      case 130: v[a[2]!] = a[0]! + Math.floor(this.rng() * (a[1]! - a[0]! + 1)); return;
       case 131: this.playerControl = false; return;
       case 132: this.playerControl = true; return;
       case 133: return; // obj.status.v
@@ -891,7 +893,7 @@ export class AgiInterp {
         return;
       }
       case 'wander': {
-        if (o.wanderCount <= 0 || o.dir === 0) { o.dir = 1 + Math.floor(Math.random() * 8); o.wanderCount = 6 + Math.floor(Math.random() * 20); }
+        if (o.wanderCount <= 0 || o.dir === 0) { o.dir = 1 + Math.floor(this.rng() * 8); o.wanderCount = 6 + Math.floor(this.rng() * 20); }
         o.wanderCount--;
         const ox = o.x, oy = o.y;
         const r = this.tryMove(i, o.x + DX[o.dir]! * step, o.y + DY[o.dir]! * step);
