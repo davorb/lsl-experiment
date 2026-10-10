@@ -60,13 +60,15 @@ export interface ViewObj {
   targetFlag: number;
   stuck: number;
   wanderCount: number;
+  /** Priority band the wanderer started in (0 = unrestricted); see stepObject. */
+  wanderPri: number;
 }
 
 const newObj = (): ViewObj => ({
   animated: false, drawn: false, updating: true, cycling: true, motion: 'none', view: 0, loop: 0, cel: 0, x: 0, y: 0, dir: 0,
   stepSize: 1, stepTime: 1, stepCount: 0, cycleTime: 1, cycleCount: 0, cycleType: 'normal', cycleFlag: 0, fixedPri: false, priority: 0,
   fixLoop: false, ignoreHorizon: false, ignoreObjs: false, ignoreBlocks: false, surface: 'any', targetX: 0, targetY: 0, targetStep: 1, targetFlag: 0,
-  stuck: 0, wanderCount: 0,
+  stuck: 0, wanderCount: 0, wanderPri: 0,
 });
 
 export type PicOp = { kind: 'draw' | 'overlay'; pic: number } | { kind: 'add'; view: number; loop: number; cel: number; x: number; y: number; pri: number };
@@ -543,7 +545,7 @@ export class AgiInterp {
       case 81: this.moveObj(a[0]!, a[1]!, a[2]!, a[3]!, a[4]!); return;
       case 82: this.moveObj(a[0]!, v[a[1]!]!, v[a[2]!]!, v[a[3]!]!, a[4]!); return;
       case 83: { const o = obj(a[0]!); o.motion = 'follow'; o.targetStep = a[1]! || o.stepSize; o.targetFlag = a[2]!; f[a[2]!] = 0; if (a[0] === 0) this.playerControl = false; return; }
-      case 84: { const o = obj(a[0]!); o.motion = 'wander'; o.wanderCount = 0; if (a[0] === 0) this.playerControl = false; return; }
+      case 84: { const o = obj(a[0]!); o.motion = 'wander'; o.wanderCount = 0; o.wanderPri = this.wanderBand(o); if (a[0] === 0) this.playerControl = false; return; }
       case 85: obj(a[0]!).motion = 'normal'; return;
       case 86: obj(a[0]!).dir = v[a[1]!]! <= 8 ? v[a[1]!]! : 0; return;
       case 87: v[a[1]!] = obj(a[0]!).dir; return;
@@ -878,6 +880,17 @@ export class AgiInterp {
     }
   }
 
+  private inBand(o: ViewObj, x: number, y: number, pri: number): boolean {
+    const w = this.celW(o);
+    for (let k = 0; k < w; k++) if (this.priAt(x + k, y) !== pri) return false;
+    return true;
+  }
+
+  private wanderBand(o: ViewObj): number {
+    const p = this.priAt(o.x + (this.celW(o) >> 1), o.y);
+    return p > 4 && p < 16 && this.inBand(o, o.x, o.y, p) ? p : 0;
+  }
+
   private stepObject(i: number, o: ViewObj): void {
     const step = o.stepSize;
     const touch = (border: number) => {
@@ -896,7 +909,10 @@ export class AgiInterp {
         if (o.wanderCount <= 0 || o.dir === 0) { o.dir = 1 + Math.floor(this.rng() * 8); o.wanderCount = 6 + Math.floor(this.rng() * 20); }
         o.wanderCount--;
         const ox = o.x, oy = o.y;
-        const r = this.tryMove(i, o.x + DX[o.dir]! * step, o.y + DY[o.dir]! * step);
+        const nx = o.x + DX[o.dir]! * step, ny = o.y + DY[o.dir]! * step;
+        // An NPC that starts in a foreground priority band (the bartender behind the bar) stays inside it.
+        if (o.wanderPri > 4 && !this.inBand(o, nx, ny, o.wanderPri)) { o.wanderCount = 0; return; }
+        const r = this.tryMove(i, nx, ny);
         touch(r.border);
         if (o.x === ox && o.y === oy) o.wanderCount = 0;
         return;
