@@ -18,6 +18,16 @@ function el<T extends HTMLElement>(tag: string, props: Partial<T> = {}, ...kids:
   return e;
 }
 
+const LOAD_QUIPS = [
+  'Larry is checking his breath…',
+  'Straightening the leisure suit…',
+  'Counting the bar stools…',
+  'Looking for a quarter for the payphone…',
+  'Asking the bartender for directions…',
+  'Dodging a puddle of something questionable…',
+  'Combing the three remaining hairs…',
+];
+
 const ARROW_DIR: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 const DIR_OF = (dx: number, dy: number): number => [[8, 1, 2], [7, 0, 3], [6, 5, 4]][dy + 1]![dx + 1]!;
 const FKEY_SCAN: Record<string, number> = { F1: 59, F2: 60, F3: 61, F4: 62, F5: 63, F6: 64, F7: 65, F8: 66, F9: 67, F10: 68, F11: 87, F12: 88 };
@@ -46,6 +56,13 @@ export class AgiGame {
   private pressed = new Set<string>();
   private lastDir = 0;
   private banner = el<HTMLDivElement>('div', { id: 'agi-banner' });
+  private loader = el<HTMLDivElement>('div', { id: 'agi-loader' });
+  private loaderBar = el<HTMLDivElement>('div', { className: 'fill' });
+  private loaderMsg = el<HTMLDivElement>('div', { className: 'msg' });
+  private loadRoom = -1;
+  private loadStart = 0;
+  private loadShown = 0;
+  private loadTimer = 0;
 
   constructor(private net: Net, private synth: Synth, private me: string, chat: ChatEntry[]) {
     this.net.onMessage = (m) => this.handle(m);
@@ -115,7 +132,12 @@ export class AgiGame {
     }
     this.keys.style.display = 'none';
     this.banner.style.display = 'none';
-    this.stage.append(canvas, this.texts, this.chatlog, this.modalBox, this.banner);
+    this.loader.append(
+      el('div', { className: 'title', textContent: 'Loading…' }),
+      el('div', { className: 'bar' }, this.loaderBar),
+      this.loaderMsg,
+    );
+    this.stage.append(canvas, this.texts, this.chatlog, this.modalBox, this.banner, this.loader);
     this.root.append(
       this.menubar,
       this.statusBar,
@@ -234,6 +256,7 @@ export class AgiGame {
 
   private onFrame(f: AgiFrame): void {
     this.frame = f;
+    if (f.room !== this.loadRoom) this.beginLoading(f.room);
     this.scene.setRoom(f.room);
     this.scene.update(f.objs, f.avatars, f.egoOwner);
     this.statusBar.style.visibility = f.statusLine ? 'visible' : 'hidden';
@@ -247,6 +270,42 @@ export class AgiGame {
     this.renderRoster();
     this.renderMenus(f);
     this.renderTexts();
+  }
+
+  // ---- room loading ---------------------------------------------------------------------------
+
+  /** A room change makes the client fetch the new room's sprites; cover the stall with a Sierra-style loading bar. */
+  private beginLoading(room: number): void {
+    this.loadRoom = room;
+    this.loadStart = performance.now();
+    this.scene.resetViewProgress();
+    this.loadShown = 0;
+    window.clearInterval(this.loadTimer);
+    this.loadTimer = window.setInterval(() => this.pollLoading(), 50);
+  }
+
+  private pollLoading(): void {
+    const now = performance.now(), t = now - this.loadStart;
+    const { done, total } = this.scene.viewProgress();
+    const finished = done >= total;
+    if (finished && t > 120) { // quick (cached) rooms never flash the overlay
+      window.clearInterval(this.loadTimer);
+      this.loadTimer = 0;
+      if (this.loader.style.display !== 'flex') return;
+      this.loaderBar.style.width = '100%';
+      window.setTimeout(() => { if (!this.loadTimer) this.loader.style.display = 'none'; }, 180);
+      return;
+    }
+    if (t < 250) return; // only bother the player when it is actually slow
+    if (this.loader.style.display !== 'flex') {
+      this.loader.style.display = 'flex';
+      this.loaderMsg.textContent = LOAD_QUIPS[Math.floor(Math.random() * LOAD_QUIPS.length)]!;
+    }
+    // Real progress, plus a slow creep so the bar never looks stuck while a single big view downloads.
+    const real = total ? done / total : 0;
+    this.loadShown = Math.max(this.loadShown, Math.min(0.95, real * 0.9 + (1 - Math.exp(-t / 2500)) * 0.1));
+    this.loaderBar.style.width = `${Math.round(this.loadShown * 20) * 5}%`; // chunky 5% steps, like EGA blocks
+    if (Math.floor(t / 1800) !== Math.floor((t - 50) / 1800)) this.loaderMsg.textContent = LOAD_QUIPS[Math.floor(Math.random() * LOAD_QUIPS.length)]!;
   }
 
   /** shake.screen: jolt the picture n times. */

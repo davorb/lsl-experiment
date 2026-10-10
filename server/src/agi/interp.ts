@@ -77,6 +77,9 @@ export interface DisplayText { row: number; col: number; text: string; fg: numbe
 export interface MenuDef { title: string; items: { text: string; controller: number; enabled: boolean }[] }
 
 class NewRoomSignal {}
+
+/** Backward jumps in one cycle before the interpreter yields a tick to the host. */
+const SPINS_PER_WAIT = 200;
 class GameRestart {}
 
 export const priorityFromY = (y: number): number => (y < 48 ? 4 : Math.min(14, Math.floor((y - 48) / 12) + 5));
@@ -133,6 +136,8 @@ export class AgiInterp {
   effects: { kind: 'shake'; n: number }[] = [];
   /** Source of randomness for the game's random() command; tests inject a seeded one. */
   rng: () => number = Math.random;
+
+  private spins = 0;
 
   constructor(readonly res: AgiResources) {
     this.reset();
@@ -227,6 +232,7 @@ export class AgiInterp {
   /** Run one interpreter cycle. Yields modal requests; the caller resumes with the player's answer. */
   *cycle(): Generator<Modal, void, unknown> {
     this.cycleNo++;
+    this.spins = 0;
     this.tickClock();
     if (this.pendingRoom !== null) {
       const n = this.pendingRoom;
@@ -368,7 +374,9 @@ export class AgiInterp {
       if (op === 0xfe) {
         const off = (code[pc]! | (code[pc + 1]! << 8)) << 16 >> 16;
         pc += 2 + off;
-        if (off < 0) yield { kind: 'wait' };
+        // A backward jump may be a polling loop that needs the host to deliver input, but most are short
+        // bounded loops (room set-up runs ~55 iterations): pausing a tick on each made room changes stall.
+        if (off < 0 && ++this.spins >= SPINS_PER_WAIT) { this.spins = 0; yield { kind: 'wait' }; }
         continue;
       }
       const argc = ARGC[op];

@@ -42,6 +42,8 @@ export class AgiScene {
   private bubbles = new Map<string, Bubble>();
   private views = new Map<number, Frame[][] | null>();
   private loading = new Set<number>();
+  private viewsAsked = 0;
+  private viewsDone = 0;
   private lightKey = -999;
   private lastVisual: Uint8Array | null = null;
   private lightInfo: LightInfo[] = [];
@@ -293,10 +295,15 @@ export class AgiScene {
     if (this.views.has(view)) return this.views.get(view)!;
     if (!this.loading.has(view)) {
       this.loading.add(view);
-      void loadView(String(view)).then((f) => { this.views.set(view, f); this.loading.delete(view); });
+      this.viewsAsked++;
+      void loadView(String(view)).then((f) => { this.views.set(view, f); this.loading.delete(view); this.viewsDone++; });
     }
     return null;
   }
+
+  /** Sprite loading since the last call to `resetViewProgress`: how many views were wanted and how many arrived. */
+  viewProgress(): { done: number; total: number } { return { done: this.viewsDone, total: this.viewsAsked }; }
+  resetViewProgress(): void { this.viewsAsked = this.loading.size; this.viewsDone = 0; }
 
   update(objs: AgiObj[], avatars: AgiAvatar[], egoOwner: string | null): void {
     this.ownerId = egoOwner;
