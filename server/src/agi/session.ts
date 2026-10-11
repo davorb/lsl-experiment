@@ -24,6 +24,7 @@ interface Avatar {
   cel: number;
   target: { x: number; y: number } | null;
   path?: { x: number; y: number }[];
+  stuck?: number;
 }
 
 interface Conn {
@@ -368,7 +369,19 @@ export class AgiSession {
         const p = it.pic.priority[ny * PIC_W + nx + i]!;
         if (p === 0 || p === 1) blocked = true;
       }
-      if (!blocked) { a.x = nx; a.y = ny; }
+      // Solid objects (the pimp, a doorman...) and the room's block rectangle stop avatars like they stop Larry.
+      if (!blocked) {
+        for (let j = 1; j < it.objs.length && !blocked; j++) {
+          const q = it.objs[j]!;
+          if (!q.animated || !q.drawn || q.ignoreObjs) continue;
+          const overlapX = nx < q.x + it.celW(q) && nx + w > q.x;
+          if (overlapX && (ny === q.y || (a.y - q.y) * (ny - q.y) < 0)) blocked = true;
+        }
+        const b = it.block;
+        if (b && (nx < b.x1 || nx + w - 1 > b.x2 || ny < b.y1 || ny > b.y2)) blocked = true;
+      }
+      if (!blocked) { a.x = nx; a.y = ny; a.stuck = 0; }
+      else if (a.target && (a.stuck = (a.stuck ?? 0) + 1) > 8) { a.target = null; a.path = undefined; a.dir = 0; a.stuck = 0; }
       a.loop = dir === 1 ? 3 : dir === 5 ? 2 : [6, 7, 8].includes(dir) ? 1 : 0;
       a.cel = (a.cel + 1) % 6;
     }
