@@ -360,7 +360,7 @@ export class AgiScene {
       e.sprite.texture = f.texture;
       const w = f.texture.width, h = f.texture.height;
       const scale = FLAT ? 1 : AgiScene.depthScale(a.y);
-      const z = priorityStartY(Math.min(14, a.y < 48 ? 4 : Math.floor((a.y - 48) / 12) + 5)) + a.y * 0.001;
+      const z = priorityStartY(Math.min(14, a.y < 47 ? 4 : Math.floor((a.y - 47) / 12) + 5)) + a.y * 0.001;
       e.sprite.anchor.set(0.5, 1);
       e.sprite.scale.set(scale);
       e.sprite.position.set(a.x * 2 + w / 2, a.y + 1);

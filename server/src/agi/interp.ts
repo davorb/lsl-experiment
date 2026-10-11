@@ -82,7 +82,8 @@ class NewRoomSignal {}
 const SPINS_PER_WAIT = 200;
 class GameRestart {}
 
-export const priorityFromY = (y: number): number => (y < 48 ? 4 : Math.min(14, Math.floor((y - 48) / 12) + 5));
+// Bands of 12 rows start at the bottom edge of row 47 (y + 1), so the hooker at y=131 sits in band 12 and shows over her bed.
+export const priorityFromY = (y: number): number => (y < 47 ? 4 : Math.min(14, Math.floor((y - 47) / 12) + 5));
 const dirFromDelta = (dx: number, dy: number): number => [[8, 1, 2], [7, 0, 3], [6, 5, 4]][Math.sign(dy || 0) + 1]![Math.sign(dx || 0) + 1]!;
 
 export class AgiInterp {
