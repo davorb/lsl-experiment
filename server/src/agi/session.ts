@@ -374,7 +374,7 @@ export class AgiSession {
         for (let j = 1; j < it.objs.length && !blocked; j++) {
           const q = it.objs[j]!;
           if (!q.animated || !q.drawn || q.ignoreObjs) continue;
-          const overlapX = nx < q.x + it.celW(q) && nx + w > q.x;
+          const overlapX = nx <= q.x + it.celW(q) && nx + w >= q.x;
           if (overlapX && (ny === q.y || (a.y - q.y) * (ny - q.y) < 0)) blocked = true;
         }
         const b = it.block;

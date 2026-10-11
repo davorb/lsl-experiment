@@ -844,7 +844,8 @@ export class AgiInterp {
         if (j === idx) continue;
         const q = this.objs[j]!;
         if (!q.animated || !q.drawn || q.ignoreObjs) continue;
-        const overlapX = nx < q.x + this.celW(q) && nx + w > q.x;
+        // As in the original interpreter, objects that merely touch edge to edge already collide.
+        const overlapX = nx <= q.x + this.celW(q) && nx + w >= q.x;
         // Colliding means landing on the other object's baseline row or stepping across it.
         if (overlapX && (ny === q.y || (o.y - q.y) * (ny - q.y) < 0)) { blocked = true; break; }
       }
