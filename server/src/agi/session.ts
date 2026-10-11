@@ -104,7 +104,6 @@ export class AgiSession {
       avatar: { x: ego.x, y: ego.y, dir: 0, loop: 2, cel: 0, target: null },
     };
     this.conns.set(id, c);
-    if (ego.drawn) this.placeAround();
     this.owner ??= id;
     this.send(c, { type: 'agi_welcome', playerId: id, chat: this.chat });
     this.broadcastPlayers();
@@ -332,24 +331,12 @@ export class AgiSession {
 
   // ---- avatars (non-owner players) --------------------------------------------------------------
 
-  /** Distinct walkable spots around Larry for the other players' avatars. */
+  /** Everyone arrives on exactly Larry's spot, the one position the game itself guarantees is valid. */
   private placeAround(): void {
-    const it = this.interp;
-    const ego = it.objs[0]!;
-    const w = it.celW(ego), h = it.celH(ego);
-    const offsets: [number, number][] = [[10, 0], [-10, 0], [0, 8], [0, -8], [20, 0], [-20, 0], [10, 8], [-10, 8], [10, -8], [-10, -8], [0, 16], [30, 0], [-30, 0], [20, 8], [-20, 8], [0, -16]];
-    const used = new Set<string>([`${ego.x},${ego.y}`]);
-    let k = 0;
+    const ego = this.interp.objs[0]!;
     for (const c of this.conns.values()) {
       if (c.id === this.owner) continue;
-      let spot = { x: ego.x, y: ego.y };
-      for (; k < offsets.length; k++) {
-        const o = offsets[k]!;
-        const cand = { x: ego.x + o[0], y: ego.y + o[1] };
-        if (it.isWalkable(w, h, cand.x, cand.y) && !used.has(`${cand.x},${cand.y}`)) { spot = cand; k++; break; }
-      }
-      c.avatar = { x: spot.x, y: spot.y, dir: 0, loop: 2, cel: 0, target: null };
-      used.add(`${spot.x},${spot.y}`);
+      c.avatar = { x: ego.x, y: ego.y, dir: 0, loop: 2, cel: 0, target: null };
     }
   }
 
