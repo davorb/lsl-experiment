@@ -9,12 +9,12 @@
     "test": "tsx test/smoke.ts"
   },
   "dependencies": {
-    "ws": "^8.18.0",
-    "zod": "^3.23.8",
-    "tsx": "^4.19.0"
+    "ws": "^8.22.0",
+    "zod": "^4.6.7",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.12",
-    "@types/node": "^20.14.0"
+    "@types/ws": "^8.18.2",
+    "@types/node": "^26.6.5"
   }
 }

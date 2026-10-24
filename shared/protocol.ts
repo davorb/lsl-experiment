@@ -28,7 +28,7 @@ export const PlayerSchema = z
 export type Player = z.infer<typeof PlayerSchema>;
 
 export const FlagValueSchema = z.union([z.boolean(), z.number(), z.string()]);
-export const FlagsSchema = z.record(FlagValueSchema);
+export const FlagsSchema = z.record(z.string(), FlagValueSchema);
 export type Flags = z.infer<typeof FlagsSchema>;
 
 export const ChatEntrySchema = z
@@ -39,7 +39,7 @@ export type ChatEntry = z.infer<typeof ChatEntrySchema>;
 export const StateSchema = z
   .object({
     roomId: z.string(),
-    players: z.record(PlayerSchema),
+    players: z.record(z.string(), PlayerSchema),
     flags: FlagsSchema,
     inventory: z.array(z.string()),
     chat: z.array(ChatEntrySchema),
@@ -80,13 +80,13 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('patch'),
-      players: z.record(PlayerSchema.nullable()).optional(),
+      players: z.record(z.string(), PlayerSchema.nullable()).optional(),
       flags: FlagsSchema.optional(),
       inventory: z.array(z.string()).optional(),
     })
     .strict(),
   // 10 Hz authoritative positions for players that moved this tick.
-  z.object({ type: z.literal('move'), t: z.number(), players: z.record(MoveEntrySchema) }).strict(),
+  z.object({ type: z.literal('move'), t: z.number(), players: z.record(z.string(), MoveEntrySchema) }).strict(),
   z
     .object({
       type: z.literal('result'),
@@ -107,7 +107,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('agi_modal_close'), mid: z.number() }).strict(),
   z.object({ type: z.literal('agi_sound'), n: z.number().nullable() }).strict(),
   z.object({ type: z.literal('agi_shake'), n: z.number() }).strict(),
-  z.object({ type: z.literal('agi_players'), players: z.record(z.string()) }).strict(),
+  z.object({ type: z.literal('agi_players'), players: z.record(z.string(), z.string()) }).strict(),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 
